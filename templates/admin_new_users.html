@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>New User Approvals</h2>
+
+<table border="1" cellpadding="5" cellspacing="0">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Course</th>
+            <th>Phone</th>
+            <th>Type</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        <tr>
+            <td>{{ user[1] }}</td>
+            <td>{{ user[2] }}</td>
+            <td>{{ user[3] }}</td>
+            <td>{{ user[4] }}</td>
+            <td>{{ user[5] }}</td>
+            <td>
+                <a href="{{ url_for('approve_new_user', user_id=user[0]) }}" class="btn btn-success">Approve</a>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="6">No new users to approve.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

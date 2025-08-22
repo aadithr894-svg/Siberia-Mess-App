@@ -1,0 +1,8 @@
+Flask==2.3.2
+Flask-MySQLdb==1.0.1
+Flask-Login==0.6.2
+Flask-Qrcode==3.2.0
+Werkzeug==2.3.8
+qrcode==7.4.2
+
+opencv-python==4.8.1.78

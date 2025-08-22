@@ -1,0 +1,57 @@
+{% extends 'admin_base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-3">Mess Cuts - {{ month_filter }}</h2>
+
+    <!-- Total mess cuts for tomorrow -->
+    <p class="mb-3">
+        Total mess cuts for <strong>tomorrow</strong>: <span class="badge bg-warning text-dark">{{ tomorrow_count }}</span>
+    </p>
+
+    <!-- Month filter form -->
+    <div class="d-flex align-items-center mb-4 gap-2">
+        <form method="get" class="d-flex gap-2">
+            <input type="month" name="month" value="{{ month_filter }}" class="form-control">
+            <button type="submit" class="btn btn-primary">Filter</button>
+        </form>
+    </div>
+
+    <!-- Mess cut table -->
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>#</th>
+                <th>User Name</th>
+                <th>Course</th>
+                <th>Mess Cut Ranges</th>
+                <th>Total Days</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user_id, user_data in cuts_by_user.items() %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ user_data.name }}</td>
+                <td>{{ user_data.course }}</td>
+                <td>
+                    <ul class="list-unstyled mb-0">
+                        {% for r in user_data.ranges %}
+                        <li>
+                            {{ r.start }} → {{ r.end }} 
+                            <span class="badge bg-info">{{ r.days }} days</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </td>
+                <td><span class="badge bg-success">{{ user_data.total_days }}</span></td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="text-center">No mess cuts found for this month.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

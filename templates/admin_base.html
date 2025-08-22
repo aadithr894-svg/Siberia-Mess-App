@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 15px; max-width: 400px; margin: 20px auto;">
+
+    <!-- Navigation to QR Scanner -->
+    <a href="{{ url_for('admin_qr_scan') }}" class="btn btn-primary" style="text-align: center; padding: 10px 20px;">
+        Go to QR Scanner
+    </a>
+
+    <!-- Reset Late Mess Button -->
+    <form action="{{ url_for('reset_late_mess') }}" method="POST" onsubmit="return confirm('Are you sure you want to reset all late mess entries?');">
+        <button type="submit" class="btn btn-danger" style="width: 100%; padding: 10px 20px;">
+            Reset Late Mess List
+        </button>
+    </form>
+
+</div>
+{% endblock %}

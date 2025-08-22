@@ -1,0 +1,27 @@
+{% extends 'admin_base.html' %}
+
+{% block admin_content %}
+<h2>Mess Cut List</h2>
+<table border="1" cellpadding="5" cellspacing="0">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>User Name</th>
+            <th>Email</th>
+            <th>Course</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for cut in cuts %}
+        <tr>
+            <td>{{ cut.id }}</td>
+            <td>{{ cut.name }}</td>
+            <td>{{ cut.email }}</td>
+            <td>{{ cut.reason }}</td>
+            <td>{{ cut.date }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>Late Mess</h2>
+    <p>{{ message }}</p>
+    {% if "available" in message %}
+        <button class="btn">Apply for Late Dinner</button>
+    {% endif %}
+</div>
+{% endblock %}

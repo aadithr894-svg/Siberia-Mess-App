@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Late Mess Requests</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .flash {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-weight: 500;
+      text-align: center;
+    }
+    .flash-success { background-color: #27ae60; color: white; }
+    .flash-danger { background-color: #e74c3c; color: white; }
+    .flash-warning { background-color: #f39c12; color: white; }
+  </style>
+</head>
+<body class="bg-gray-100 p-6">
+
+  <div class="max-w-5xl mx-auto">
+
+    <h2 class="text-2xl font-bold mb-6">Late Mess Requests</h2>
+
+    <!-- Flask Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <table class="min-w-full bg-white border rounded-lg overflow-hidden" id="late-mess-table">
+      <thead class="bg-indigo-500 text-white">
+        <tr>
+          <th class="py-2 px-4">User</th>
+          <th class="py-2 px-4">Date Requested</th>
+          <th class="py-2 px-4">Reason</th>
+          <th class="py-2 px-4">Status</th>
+          <th class="py-2 px-4">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lm in late_mess_requests %}
+        <tr id="late-mess-{{ lm.id }}" class="border-b">
+          <td class="py-2 px-4">{{ lm.name }}</td>
+          <td class="py-2 px-4">{{ lm.date_requested }}</td>
+          <td class="py-2 px-4">{{ lm.reason or 'N/A' }}</td>
+          <td class="py-2 px-4" id="status-{{ lm.id }}">Pending</td>
+          <td class="py-2 px-4">
+            <button class="approve-btn bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600" data-id="{{ lm.id }}">Approve</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+<script>
+document.querySelectorAll('.approve-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        const lmId = this.getAttribute('data-id');
+        fetch(`/admin/approve_late/${lmId}`)
+            .then(response => {
+                // If Flask returns a redirect page (HTML), treat as success
+                if (response.redirected) {
+                    window.location.href = response.url;
+                    return;
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Optional: if using JSON API, handle success/fail here
+                // For now, just update table directly
+                document.getElementById(`status-${lmId}`).innerText = 'Approved';
+                this.remove(); // Remove approve button
+            })
+            .catch(err => {
+                alert("Error approving late mess: " + err);
+            });
+    });
+});
+</script>
+
+</body>
+</html>

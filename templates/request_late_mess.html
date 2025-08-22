@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto p-4">
+
+  <h2 class="text-2xl font-bold mb-4">Request Late Mess</h2>
+
+  <!-- Caution / Info -->
+  <p class="mb-4 px-4 py-2 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded">
+    ⚠️ Late mess can only be requested for <strong>today's dinner</strong> between <strong>4:00 PM and 8:30 PM</strong>.
+  </p>
+
+  <!-- Late Mess Request Button -->
+  <form method="POST">
+      {% if start_time <= now_time <= end_time %}
+        <button class="btn bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded" type="submit">
+            Request Late Mess for Today
+        </button>
+      {% else %}
+        <button class="btn bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed" type="button" disabled>
+            Late Mess Available 4:00 PM - 8:30 PM
+        </button>
+      {% endif %}
+  </form>
+
+  <!-- Your Late Mess Requests -->
+  <h3 class="text-xl font-semibold mt-6 mb-2">Your Late Mess Requests</h3>
+  <table class="min-w-full bg-white border rounded-lg overflow-hidden">
+      <thead class="bg-indigo-500 text-white">
+          <tr>
+              <th class="py-2 px-4">Date</th>
+              <th class="py-2 px-4">Status</th>
+          </tr>
+      </thead>
+      <tbody>
+          {% for req in late_requests %}
+          <tr class="border-b hover:bg-gray-100">
+              <td class="py-2 px-4">{{ req.date_requested }}</td>
+              <td class="py-2 px-4">
+                  {% if req.approved %}
+                      <span class="text-green-600 font-semibold">Approved ✅</span>
+                  {% else %}
+                      <span class="text-yellow-600 font-semibold">Pending ⏳</span>
+                  {% endif %}
+              </td>
+          </tr>
+          {% endfor %}
+      </tbody>
+  </table>
+
+</div>
+{% endblock %}

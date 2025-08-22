@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h2 { margin-top: 30px; }
+        input, button { padding: 5px 10px; margin: 5px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        table, th, td { border: 1px solid black; }
+        th, td { padding: 10px; text-align: center; }
+        .message { color: red; margin-top: 10px; }
+        #qrCode { margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<h1>Welcome, {{ current_user.name }}</h1>
+
+<!-- QR Code Section -->
+<h2>Your Mess QR Code</h2>
+<img id="qrCode" src="data:image/png;base64,{{ qr_code }}" alt="Your QR Code">
+
+<!-- Mess Cut Application -->
+<h2>Apply for Mess Cut</h2>
+<label for="cutDays">Number of Days (min 3): </label>
+<input type="number" id="cutDays" name="cutDays" min="3" value="3">
+<button id="applyMessCut">Apply Mess Cut</button>
+<p class="message" id="messCutMsg"></p>
+
+<!-- Late Mess Application -->
+<h2>Apply for Late Mess (Dinner Only, 4 PM - 8:30 PM)</h2>
+<button id="applyLateMess">Apply Late Mess</button>
+<p class="message" id="lateMessMsg"></p>
+
+<!-- Script Section -->
+<script>
+    // Apply Mess Cut
+    const applyMessCutBtn = document.getElementById('applyMessCut');
+    const messCutMsg = document.getElementById('messCutMsg');
+
+    applyMessCutBtn.addEventListener('click', () => {
+        let days = parseInt(document.getElementById('cutDays').value);
+        if (days < 3) {
+            messCutMsg.style.color = 'red';
+            messCutMsg.innerText = 'You must apply for at least 3 days';
+            return;
+        }
+
+        fetch('/apply_mess_cut', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({days: days})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success){
+                messCutMsg.style.color = 'green';
+                messCutMsg.innerText = `Mess cut applied for ${days} day(s) successfully!`;
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                messCutMsg.style.color = 'red';
+                messCutMsg.innerText = data.message;
+            }
+        });
+    });
+
+    // Apply Late Mess
+    const applyLateMessBtn = document.getElementById('applyLateMess');
+    const lateMessMsg = document.getElementById('lateMessMsg');
+
+    applyLateMessBtn.addEventListener('click', () => {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const currentTime = hours + minutes/60;
+
+        if(currentTime < 16 || currentTime > 20.5){
+            lateMessMsg.style.color = 'red';
+            lateMessMsg.innerText = 'Late mess can only be applied between 4 PM and 8:30 PM';
+            return;
+        }
+
+        fetch('/apply_late_mess', {
+            method: 'POST',
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success){
+                lateMessMsg.style.color = 'green';
+                lateMessMsg.innerText = 'Late mess applied successfully for today!';
+            } else {
+                lateMessMsg.style.color = 'red';
+                lateMessMsg.innerText = data.message;
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

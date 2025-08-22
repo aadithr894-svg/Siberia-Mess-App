@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+    }
+    .card {
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(10px);
+      padding: 2rem;
+      border-radius: 1rem;
+      width: 100%;
+      max-width: 24rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    .input-field {
+      position: relative;
+      margin-bottom: 1.5rem;
+    }
+    .input-field input, .input-field select {
+      width: 100%;
+      padding: 14px;
+      border-radius: 0.5rem;
+      border: 1px solid #ccc;
+      outline: none;
+      transition: border 0.3s;
+      font-size: 1rem;
+    }
+    .input-field label {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      transform: translateY(-50%);
+      background: white;
+      padding: 0 4px;
+      color: #999;
+      transition: 0.3s;
+      pointer-events: none;
+      font-size: 1rem;
+    }
+    .input-field input:focus + label,
+    .input-field input:not(:placeholder-shown) + label,
+    .input-field select:focus + label,
+    .input-field select:not([value=""]) + label {
+      top: -8px;
+      left: 8px;
+      font-size: 0.75rem;
+      color: #4f46e5;
+    }
+    .flash {
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+      font-weight: 500;
+      text-align: center;
+      font-size: 0.875rem;
+    }
+    .flash-success { background-color: #27ae60; color: white; }
+    .flash-danger { background-color: #e74c3c; color: white; }
+
+    @media (max-width: 400px) {
+      .card {
+        padding: 1.5rem;
+      }
+      .input-field input, .input-field select {
+        padding: 12px;
+        font-size: 0.95rem;
+      }
+      .input-field label {
+        font-size: 0.9rem;
+      }
+      button {
+        padding: 12px;
+        font-size: 0.95rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Register</h2>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('register') }}">
+      <div class="input-field">
+        <input type="text" name="name" placeholder=" " required>
+        <label>Name</label>
+      </div>
+
+      <div class="input-field">
+        <input type="email" name="email" placeholder=" " required>
+        <label>Email</label>
+      </div>
+
+      <div class="input-field">
+        <input type="text" name="phone" placeholder=" " pattern="\d{10}" maxlength="10" required>
+        <label>Phone (10 digits)</label>
+      </div>
+
+      <div class="input-field">
+        <input type="text" name="course" placeholder=" " required>
+        <label>Course</label>
+      </div>
+
+      <div class="input-field">
+        <input type="password" name="password" placeholder=" " required>
+        <label>Password</label>
+      </div>
+
+      <div class="input-field">
+        <select name="user_type" required>
+          <option value="" disabled selected></option>
+          <option value="guest">Guest</option>
+          <option value="inmate">Inmate</option>
+          <option value="outmess">Outmess</option>
+        </select>
+        <label>User Type</label>
+      </div>
+
+      <button type="submit" class="w-full p-3 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">Register</button>
+    </form>
+
+    <p class="mt-4 text-center text-gray-700 text-sm">
+      Already have an account? 
+      <a href="{{ url_for('login') }}" class="text-indigo-500 hover:underline">Login</a>
+    </p>
+  </div>
+</body>
+</html>

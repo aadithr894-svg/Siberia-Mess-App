@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4 text-center">
+    <h2 class="mb-3">Your QR Code</h2>
+    <p class="text-muted">Show this QR at the mess for verification.</p>
+    
+    <div class="card shadow p-4 d-inline-block">
+        <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" class="img-fluid"/>
+    </div>
+</div>
+{% endblock %}

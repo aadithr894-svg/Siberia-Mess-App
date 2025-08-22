@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Edit Menu</h2>
+<form method="POST">
+    <input type="text" name="day" placeholder="Day (e.g., Monday)" required>
+    <input type="text" name="menu" placeholder="Menu Details" required>
+    <button type="submit">Update Menu</button>
+</form>
+{% endblock %}

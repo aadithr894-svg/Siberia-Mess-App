@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Mess Cuts</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: #f4f7f9;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            margin: 15px auto;
+            padding: 20px;
+            max-width: 800px;
+            transition: transform 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            text-align: center;
+        }
+        th {
+            background: #007bff;
+            color: #fff;
+            border-radius: 6px 6px 0 0;
+        }
+        tr:nth-child(even) td {
+            background: #f9f9f9;
+        }
+        tr:hover td {
+            background: #e0f0ff;
+        }
+        .no-data {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <h2>My Mess Cuts</h2>
+    {% if mess_cuts %}
+        {% for mc in mess_cuts %}
+        <div class="card">
+            <table>
+                <tr>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Course</th>
+                    <th>Skipped Meals</th>
+                </tr>
+                <tr>
+                    <td>{{ mc['start_date'] }}</td>
+                    <td>{{ mc['end_date'] }}</td>
+                    <td>{{ mc['course'] }}</td>
+                    <td>{{ mc['total_skipped_meals'] }}</td>
+                </tr>
+            </table>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="card no-data">No mess cuts found.</div>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,119 @@
+/* General body style */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f0f8ff; /* Light blue background */
+    margin: 0;
+    padding: 0;
+}
+
+/* Navigation bar */
+nav {
+    background-color: #ffffff; /* White nav bar */
+    padding: 15px;
+    display: flex;
+    gap: 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* Navigation buttons */
+.nav-btn {
+    text-decoration: none;
+    padding: 10px 20px;
+    border-radius: 15px;
+    background-color: #87cefa; /* Sky blue */
+    color: white;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.nav-btn:hover {
+    background-color: #00bfff; /* Deep blue on hover */
+    transform: translateY(-3px);
+}
+
+/* Content wrapper */
+.content {
+    padding: 30px;
+    text-align: center;
+}
+
+/* Option boxes (for dashboard links) */
+.option-box {
+    display: inline-block;
+    background-color: #ffffff; /* White box */
+    color: #00bfff; /* Blue text */
+    font-weight: bold;
+    padding: 25px 40px;
+    margin: 15px;
+    border-radius: 20px;
+    text-decoration: none;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.option-box:hover {
+    background-color: #00bfff; /* Blue on hover */
+    color: #ffffff; /* Text becomes white */
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+}
+
+/* Forms styling */
+form {
+    display: inline-block;
+    text-align: left;
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+form input, form textarea, form button {
+    display: block;
+    width: 100%;
+    margin: 10px 0;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    font-size: 16px;
+}
+
+form button {
+    background-color: #00bfff;
+    color: white;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+form button:hover {
+    background-color: #1e90ff;
+    transform: translateY(-3px);
+}
+
+/* Tables */
+table {
+    width: 80%;
+    margin: 20px auto;
+    border-collapse: collapse;
+    background-color: #ffffff;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+table th, table td {
+    padding: 12px 15px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+}
+
+table th {
+    background-color: #87cefa;
+    color: white;
+}
+
+table tr:hover {
+    background-color: #f1f9ff;
+}

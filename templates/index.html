@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<div style="text-align:center; padding: 50px 20px; font-family: 'Arial', sans-serif;">
+
+    <h1 style="color: #2c3e50; font-size: 3em; margin-bottom: 15px;">Welcome to <span style="color:#e67e22;">Siberia Mess App</span></h1>
+    <p style="color: #34495e; font-size: 1.2em; margin-bottom: 40px;">
+        Manage your mess attendance, late requests, and mess cuts easily.
+    </p>
+
+    <div style="display:flex; justify-content:center; gap:30px; flex-wrap: wrap;">
+
+        <!-- Apply Mess Cut Card -->
+        <a href="{{ url_for('apply_mess_cut') }}" style="display:flex; flex-direction:column; align-items:center; justify-content:center; background:#3498db; color:white; padding:25px 20px; border-radius:15px; text-decoration:none; width:180px; height:100px; box-shadow:0 4px 15px rgba(0,0,0,0.2); font-size:1.2em; font-weight:bold; transition:0.3s;">
+            Apply Mess Cut
+        </a>
+
+        <!-- Request Late Mess Card -->
+        <a href="{{ url_for('request_late_mess') }}" style="display:flex; flex-direction:column; align-items:center; justify-content:center; background:#1abc9c; color:white; padding:25px 20px; border-radius:15px; text-decoration:none; width:180px; height:100px; box-shadow:0 4px 15px rgba(0,0,0,0.2); font-size:1.2em; font-weight:bold; transition:0.3s;">
+            Request Late Mess
+        </a>
+
+        <!-- View QR Code Card -->
+        <a href="{{ url_for('my_qr') }}" style="display:flex; flex-direction:column; align-items:center; justify-content:center; background:#e67e22; color:white; padding:25px 20px; border-radius:15px; text-decoration:none; width:180px; height:100px; box-shadow:0 4px 15px rgba(0,0,0,0.2); font-size:1.2em; font-weight:bold; transition:0.3s;">
+            View QR Code
+        </a>
+
+    </div>
+
+</div>
+
+<style>
+    a:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+    }
+</style>
+{% endblock %}

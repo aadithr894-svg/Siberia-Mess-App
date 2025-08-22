@@ -1,0 +1,44 @@
+{% extends 'admin_base.html' %}
+
+{% block content %}
+<h2>Simulate QR Scan</h2>
+
+<!-- Manual QR simulation -->
+<div style="margin-bottom: 20px;">
+    <label>User ID: </label>
+    <input type="number" id="user_id_input" min="1" value="1">
+    
+    <label>Meal Type: </label>
+    <select id="meal_type_input">
+        <option value="breakfast">Breakfast</option>
+        <option value="lunch">Lunch</option>
+        <option value="dinner">Dinner</option>
+    </select>
+    
+    <button id="simulate_scan" class="btn btn-primary">Simulate Scan</button>
+</div>
+
+<p id="scan_result" style="font-weight: bold;"></p>
+
+<script>
+document.getElementById('simulate_scan').addEventListener('click', function() {
+    const userId = parseInt(document.getElementById('user_id_input').value);
+    const mealType = document.getElementById('meal_type_input').value;
+
+    fetch('/admin/scan_qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, meal_type: mealType })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if(data.success){
+            document.getElementById('scan_result').textContent = 
+                `Simulated scan: ${data.name}. ${mealType} count: ${data.count}`;
+        } else {
+            document.getElementById('scan_result').textContent = "Error: " + data.message;
+        }
+    });
+});
+</script>
+{% endblock %}

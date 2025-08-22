@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apply Mess Cut</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .card {
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(10px);
+      padding: 2rem;
+      border-radius: 1rem;
+      width: 24rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    h2 { text-align: center; font-weight: bold; margin-bottom: 1.5rem; color: #333; }
+    .flash {
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+      font-weight: 500;
+      text-align: center;
+    }
+    .flash-success { background-color: #27ae60; color: white; }
+    .flash-danger { background-color: #e74c3c; color: white; }
+    .flash-warning { background-color: #f39c12; color: white; }
+    label { display: block; margin-bottom: 0.25rem; font-weight: 500; color: #555; }
+    input[type="date"] { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border-radius: 0.5rem; border: 1px solid #ccc; }
+    button { width: 100%; padding: 0.5rem; background-color: #6366f1; color: white; border-radius: 0.5rem; font-weight: 600; }
+    button:hover { background-color: #4f46e5; }
+    small { color: #666; display: block; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Apply Mess Cut</h2>
+
+    <!-- Flashed messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" id="mess-cut-form">
+      <label for="start_date">Start Date:</label>
+      <input type="date" id="start_date" name="start_date" min="{{ min_start_date }}" required>
+
+      <label for="end_date">End Date:</label>
+      <input type="date" id="end_date" name="end_date" min="{{ min_end_date }}" required>
+      <small>Minimum 3 consecutive days</small>
+
+      <button type="submit">Apply Mess Cut</button>
+    </form>
+  </div>
+
+  <script>
+    const startInput = document.getElementById('start_date');
+    const endInput = document.getElementById('end_date');
+
+    startInput.addEventListener('change', function() {
+      const startDate = new Date(this.value);
+      const minEndDate = new Date(startDate);
+      minEndDate.setDate(startDate.getDate() + 2); // minimum 3 days
+      const minDateStr = minEndDate.toISOString().split('T')[0];
+      endInput.value = minDateStr;
+      endInput.min = minDateStr;
+    });
+
+    // Prevent submitting if tomorrow after 10 PM
+    const form = document.getElementById('mess-cut-form');
+    form.addEventListener('submit', function(e) {
+      const now = new Date();
+      const startDate = new Date(startInput.value);
+      const tomorrow = new Date();
+      tomorrow.setDate(now.getDate() + 1);
+      tomorrow.setHours(0,0,0,0);
+
+      if (startDate.getTime() === tomorrow.getTime() && now.getHours() >= 22) {
+        e.preventDefault();
+        alert("Cannot apply mess cut for tomorrow after 10 PM today.");
+      }
+    });
+  </script>
+</body>
+</html>

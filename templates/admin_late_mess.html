@@ -1,0 +1,97 @@
+{% extends 'admin_base.html' %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto p-4">
+
+  <h2 class="text-2xl font-bold mb-4">Late Mess Requests</h2>
+
+  <!-- Flask flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="mb-4 px-4 py-2 rounded {{ 'bg-green-500 text-white' if category=='success' else 'bg-red-500 text-white' if category=='danger' else 'bg-yellow-400 text-black' }}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <!-- Reset Late Mess Requests -->
+  <form action="{{ url_for('reset_late_mess') }}" method="POST" class="mb-4">
+      <button type="submit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">Reset Late Mess Requests</button>
+  </form>
+
+  <!-- Late Mess Table -->
+  <table class="min-w-full bg-white border rounded-lg overflow-hidden">
+      <thead class="bg-indigo-500 text-white">
+          <tr>
+              <th class="py-2 px-4">User Name</th>
+              <th class="py-2 px-4">Email</th>
+              <th class="py-2 px-4">Date Requested</th>
+              <th class="py-2 px-4">Reason</th>
+              <th class="py-2 px-4">Action</th>
+          </tr>
+      </thead>
+      <tbody>
+          {% for lm in late_mess_requests %}
+          <tr class="border-b hover:bg-gray-100">
+              <td class="py-2 px-4">{{ lm.name }}</td>
+              <td class="py-2 px-4">{{ lm.email }}</td>
+              <td class="py-2 px-4">{{ lm.date_requested }}</td>
+              <td class="py-2 px-4">{{ lm.reason or 'N/A' }}</td>
+              <td class="py-2 px-4">
+                  {% if not lm.approved %}
+                  <button id="approve-btn-{{ lm.id }}" 
+                          class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                          data-id="{{ lm.id }}">
+                     Approve
+                  </button>
+                  {% else %}
+                  <span class="bg-blue-500 text-white px-2 py-1 rounded">Approved ✅</span>
+                  {% endif %}
+              </td>
+          </tr>
+          {% endfor %}
+      </tbody>
+  </table>
+</div>
+
+<script>
+document.querySelectorAll('button[id^="approve-btn-"]').forEach(button => {
+    button.addEventListener('click', function() {
+        const lmId = this.dataset.id;
+
+        fetch(`/admin/approve_late/${lmId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const statusCell = this.parentElement;
+                
+                // Create blue approved box
+                const flashDiv = document.createElement('div');
+                flashDiv.className = "inline-block bg-blue-500 text-white px-2 py-1 rounded opacity-100 transition-opacity duration-1000";
+                flashDiv.innerText = "Approved ✅";
+                
+                // Replace button with approved box
+                statusCell.innerHTML = '';
+                statusCell.appendChild(flashDiv);
+
+                // Fade out after 1.5s
+                setTimeout(() => {
+                    flashDiv.style.opacity = 0;
+                }, 1500);
+            } else {
+                alert(data.message);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Error approving late mess.");
+        });
+    });
+});
+</script>
+{% endblock %}

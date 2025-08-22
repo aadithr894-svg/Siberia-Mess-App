@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My QR Code - Siberia Mess App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="container card">
+    <h1>My QR Code</h1>
+    <img src="{{ qr_path }}" alt="QR Code" style="border-radius:12px; border:2px solid #007acc;">
+    <br><br>
+    <a class="btn" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+</div>
+</body>
+</html>
