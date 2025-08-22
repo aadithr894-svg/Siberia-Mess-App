@@ -7,6 +7,7 @@ import qrcode
 import io
 import base64
 from datetime import datetime, time
+import os
 
 # ---------------- Flask App ----------------
 app = Flask(__name__)
