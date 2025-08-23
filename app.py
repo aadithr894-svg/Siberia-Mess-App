@@ -539,13 +539,7 @@ def reject_user(user_id):
     return redirect(url_for('new_users_list'))
 
 
-# -------- LOGOUT --------
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    flash("Logged out successfully", "info")
-    return redirect(url_for('index'))
+
 
 # -------- USER DASHBOARD --------
 @app.route('/dashboard')
