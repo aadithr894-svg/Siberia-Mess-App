@@ -67,11 +67,14 @@ def create_admin():
         print("✅ Default admin created")
     cur.close()
 
+
 # ---------------- ROUTES ----------------
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# -------- REGISTER --------
 # -------- REGISTER --------
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -81,32 +84,43 @@ def register():
         course = request.form['course']
         phone = request.form['phone']
         password = request.form['password']
-        user_type = request.form['user_type']
+        user_type = request.form['user_type']  # student or admin
 
+        # ✅ Basic required fields check
         if not name or not email or not password or not user_type:
             flash("All fields are required.", "danger")
             return redirect(url_for('register'))
 
+        # ✅ Phone number validation
         if not phone.isdigit() or len(phone) != 10:
-            flash("Phone must be 10 digits.", "danger")
+            flash("Phone number must be exactly 10 digits.", "danger")
             return redirect(url_for('register'))
 
-        conn = get_db()
-        cur = conn.cursor()
+        # ✅ Hash password
         hashed_password = generate_password_hash(password)
 
         try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Insert into new_users table
             cur.execute("""
-                INSERT INTO new_users (name,email,phone,course,password,user_type)
-                VALUES (%s,%s,%s,%s,%s,%s)
-            """, (name,email,phone,course,hashed_password,user_type))
+                INSERT INTO new_users (name, email, phone, course, password, user_type)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (name, email, phone, course, hashed_password, user_type))
             conn.commit()
+
             flash("Registration successful! Await admin approval.", "success")
+
         except Exception as e:
-            conn.rollback()
             flash(f"Database error: {e}", "danger")
+
         finally:
-            cur.close()
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
         return redirect(url_for('login'))
 
     return render_template('register.html')
@@ -306,62 +320,6 @@ def create_admin():
 
 
 
-# ---------------- ROUTES ----------------
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-# -------- REGISTER --------
-# -------- REGISTER --------
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        name = request.form['name']
-        email = request.form['email']
-        course = request.form['course']
-        phone = request.form['phone']
-        password = request.form['password']
-        user_type = request.form['user_type']  # student or admin
-
-        # ✅ Basic required fields check
-        if not name or not email or not password or not user_type:
-            flash("All fields are required.", "danger")
-            return redirect(url_for('register'))
-
-        # ✅ Phone number validation
-        if not phone.isdigit() or len(phone) != 10:
-            flash("Phone number must be exactly 10 digits.", "danger")
-            return redirect(url_for('register'))
-
-        # ✅ Hash password
-        hashed_password = generate_password_hash(password)
-
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
-
-            # Insert into new_users table
-            cur.execute("""
-                INSERT INTO new_users (name, email, phone, course, password, user_type)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (name, email, phone, course, hashed_password, user_type))
-            conn.commit()
-
-            flash("Registration successful! Await admin approval.", "success")
-
-        except Exception as e:
-            flash(f"Database error: {e}", "danger")
-
-        finally:
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()
-
-        return redirect(url_for('login'))
-
-    return render_template('register.html')
 
 
 # REPLACE your current /new_users route with this
