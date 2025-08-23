@@ -541,35 +541,7 @@ def reject_user(user_id):
 
 
 
-# -------- USER DASHBOARD --------
-@app.route('/dashboard')
-@login_required
-def user_dashboard():
-    # -------- Generate QR code --------
-    qr = qrcode.QRCode(box_size=10, border=5)
-    qr.add_data(str(current_user.id))
-    qr.make(fit=True)
-    img = qr.make_image(fill='black', back_color='white')
 
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    qr_code_b64 = base64.b64encode(buffer.getvalue()).decode('ascii')
-
-    # -------- Fetch late mess requests from Postgres --------
-    conn = get_db()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)  # returns dict rows
-    cur.execute(
-        "SELECT * FROM late_mess WHERE user_id = %s ORDER BY date DESC",
-        (current_user.id,)
-    )
-    late_requests = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    return render_template(
-        'dashboard.html',
-        qr_code=qr_code_b64,
-        late_requests=late_requests
     )
 # -------- ADMIN DASHBOARD --------
 @app.route('/admin')
