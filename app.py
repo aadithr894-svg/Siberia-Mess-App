@@ -40,15 +40,6 @@ def close_db(e=None):
     if db is not None:
         db.close()
 
-# ---------------- USER CLASS ----------------
-class User(UserMixin):
-    def __init__(self, id, name, email, user_type):
-        self.id = id
-        self.name = name
-        self.email = email
-        self.user_type = user_type
-        self.is_admin = user_type == 'admin'
-
 @login_manager.user_loader
 def load_user(user_id):
     conn = get_db()
