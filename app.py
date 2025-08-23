@@ -215,13 +215,7 @@ def logout():
     return redirect(url_for('index'))
 
 
-# ----------------- START APP -----------------
-if __name__ == "__main__":
-    # Only for local development
-    with app.app_context():
-        create_admin()   # Ensure default admin exists only once
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
@@ -1432,7 +1426,10 @@ def approve_late(late_mess_id):
 # ----------------- START APP -----------------
 # ----------------- START APP -----------------
 
+# ----------------- START APP -----------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # fallback for local testing
-    app.run(host="0.0.0.0", port=port)
-
+    # Only for local development
+    with app.app_context():
+        create_admin()   # Ensure default admin exists only once
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
