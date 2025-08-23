@@ -542,7 +542,7 @@ def reject_user(user_id):
 
 
 
-    )
+    
 # -------- ADMIN DASHBOARD --------
 @app.route('/admin')
 @login_required
