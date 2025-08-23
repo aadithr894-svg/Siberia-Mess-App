@@ -1,32 +1,229 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
-
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, g
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-import MySQLdb.cursors
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import qrcode
 import io
 import base64
-from datetime import datetime, time
 import os
+from datetime import datetime, date, timedelta
 from config import Config
-import psycopg2
-from psycopg2.extras import RealDictCursor
 # ---------------- Flask App ----------------
 app = Flask(__name__)
 app.config.from_object(Config)
 
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
-def get_db_connection():
-    conn = psycopg2.connect(
-        host=Config.DB_HOST,
-        port=Config.DB_PORT,
-        database=Config.DB_NAME,
-        user=Config.DB_USER,
-        password=Config.DB_PASSWORD,
-        cursor_factory=RealDictCursor
-    )
-    return conn
+def get_db():
+    if 'db' not in g:
+        g.db = psycopg2.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            database=Config.DB_NAME,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            cursor_factory=RealDictCursor
+        )
+    return g.db
+
+
 mysql = MySQL(app)
+
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, g
+from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import qrcode
+import io
+import base64
+import os
+from datetime import datetime, date, timedelta
+from config import Config
+
+# ---------------- Flask App ----------------
+app = Flask(__name__)
+app.config.from_object(Config)
+
+# ---------------- LOGIN MANAGER ----------------
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# ---------------- DATABASE CONNECTION ----------------
+def get_db():
+    if 'db' not in g:
+        g.db = psycopg2.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            database=Config.DB_NAME,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            cursor_factory=RealDictCursor
+        )
+    return g.db
+
+@app.teardown_appcontext
+def close_db(e=None):
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
+# ---------------- USER CLASS ----------------
+class User(UserMixin):
+    def __init__(self, id, name, email, user_type):
+        self.id = id
+        self.name = name
+        self.email = email
+        self.user_type = user_type
+        self.is_admin = user_type == 'admin'
+
+@login_manager.user_loader
+def load_user(user_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+    data = cur.fetchone()
+    cur.close()
+    if data:
+        return User(data['id'], data['name'], data['email'], data['user_type'])
+    return None
+
+# ---------------- CREATE DEFAULT ADMIN ----------------
+def create_admin():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE email = %s", ("admin@example.com",))
+    admin = cur.fetchone()
+    hashed_password = generate_password_hash("admin123")
+    if not admin:
+        cur.execute("""
+            INSERT INTO users (name, email, phone, course, password, user_type, approved)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, ("Super Admin", "admin@example.com", "0000000000", "N/A", hashed_password, "admin", True))
+        conn.commit()
+        print("✅ Default admin created")
+    cur.close()
+
+# ---------------- ROUTES ----------------
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+# -------- REGISTER --------
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        course = request.form['course']
+        phone = request.form['phone']
+        password = request.form['password']
+        user_type = request.form['user_type']
+
+        if not name or not email or not password or not user_type:
+            flash("All fields are required.", "danger")
+            return redirect(url_for('register'))
+
+        if not phone.isdigit() or len(phone) != 10:
+            flash("Phone must be 10 digits.", "danger")
+            return redirect(url_for('register'))
+
+        conn = get_db()
+        cur = conn.cursor()
+        hashed_password = generate_password_hash(password)
+
+        try:
+            cur.execute("""
+                INSERT INTO new_users (name,email,phone,course,password,user_type)
+                VALUES (%s,%s,%s,%s,%s,%s)
+            """, (name,email,phone,course,hashed_password,user_type))
+            conn.commit()
+            flash("Registration successful! Await admin approval.", "success")
+        except Exception as e:
+            conn.rollback()
+            flash(f"Database error: {e}", "danger")
+        finally:
+            cur.close()
+        return redirect(url_for('login'))
+
+    return render_template('register.html')
+
+# -------- LOGIN --------
+@app.route('/login', methods=['GET','POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+        user = cur.fetchone()
+        cur.close()
+
+        if user and check_password_hash(user['password'], password):
+            if user['user_type'] != "admin" and not user['approved']:
+                flash("Your account is awaiting admin approval.", "warning")
+                return redirect(url_for('login'))
+            login_user(User(user['id'], user['name'], user['email'], user['user_type']))
+            flash("Login successful!", "success")
+            if user['user_type'] == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('user_dashboard'))
+        else:
+            flash("Invalid credentials.", "danger")
+            return redirect(url_for('login'))
+
+    return render_template('login.html')
+
+# -------- USER DASHBOARD --------
+@app.route('/dashboard')
+@login_required
+def user_dashboard():
+    qr = qrcode.QRCode(box_size=10, border=5)
+    qr.add_data(str(current_user.id))
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    qr_code_b64 = base64.b64encode(buffer.getvalue()).decode('ascii')
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM late_mess WHERE user_id = %s ORDER BY date_requested DESC", (current_user.id,))
+    late_requests = cur.fetchall()
+    cur.close()
+
+    return render_template('dashboard.html', qr_code=qr_code_b64, late_requests=late_requests)
+
+# -------- ADMIN DASHBOARD --------
+@app.route('/admin')
+@login_required
+def admin_dashboard():
+    if not current_user.is_admin:
+        flash("Unauthorized", "danger")
+        return redirect(url_for('user_dashboard'))
+    return render_template('admin_base.html')
+
+# -------- LOGOUT --------
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash("Logged out successfully", "info")
+    return redirect(url_for('index'))
+
+# ----------------- START APP -----------------
+if __name__ == "__main__":
+    create_admin()
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
 
 # ---------------- LOGIN MANAGER ----------------
 login_manager = LoginManager()
@@ -45,12 +242,13 @@ class User(UserMixin):
         
 @login_manager.user_loader
 def load_user(user_id):
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    conn = get_db()
+    cur = conn.cursor()
     cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
     data = cur.fetchone()
     cur.close()
     if data:
-        return User(data['id'], data['name'], data['email'], data['user_type'])  # ✅ fixed column
+        return User(data['id'], data['name'], data['email'], data['user_type'])
     return None
 
 # ---------------- CREATE ADMIN ----------------
@@ -66,34 +264,51 @@ import MySQLdb
 # Function to create default admin
 # -----------------------------
 # ---------------- CREATE ADMIN ----------------
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from werkzeug.security import generate_password_hash
+
 def create_admin():
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    try:
+        conn = psycopg2.connect(
+            host="dpg-d2kbemv5r7bs73eljh4g-a",   # Render internal hostname
+            database="siberia_mess_app",
+            user="siberia_mess_app_user",
+            password="lfFfFk3uGBHj5nkdrowYYHMlVGzyUB0o",
+            port=5432
+        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    # Check if admin already exists
-    cur.execute("SELECT * FROM users WHERE email = %s", ("admin@example.com",))
-    admin = cur.fetchone()
+        # Check if admin already exists
+        cur.execute("SELECT * FROM users WHERE email = %s", ("admin@example.com",))
+        admin = cur.fetchone()
 
-    hashed_password = generate_password_hash("admin123")
+        hashed_password = generate_password_hash("admin123")
 
-    if not admin:
-        # Insert new admin
-        cur.execute("""
-            INSERT INTO users (name, email, phone, course, password, user_type, approved)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, ("Super Admin", "admin@example.com", "0000000000", "N/A", hashed_password, "admin", 1))
-        mysql.connection.commit()
-        print("✅ Default admin created: email=admin@example.com, password=admin123")
-    else:
-        # Make sure admin is approved and user_type is admin
-        cur.execute("""
-            UPDATE users
-            SET user_type=%s, approved=%s, password=%s
-            WHERE email=%s
-        """, ("admin", 1, hashed_password, "admin@example.com"))
-        mysql.connection.commit()
-        print("ℹ️ Admin already exists. Reset password and ensured approved=1.")
+        if not admin:
+            # Insert new admin
+            cur.execute("""
+                INSERT INTO users (name, email, phone, course, password, user_type, approved)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, ("Super Admin", "admin@example.com", "0000000000", "N/A", hashed_password, "admin", 1))
+            conn.commit()
+            print("✅ Default admin created: email=admin@example.com, password=admin123")
+        else:
+            # Make sure admin is approved and user_type is admin
+            cur.execute("""
+                UPDATE users
+                SET user_type=%s, approved=%s, password=%s
+                WHERE email=%s
+            """, ("admin", 1, hashed_password, "admin@example.com"))
+            conn.commit()
+            print("ℹ️ Admin already exists. Reset password and ensured approved=1.")
 
-    cur.close()
+        cur.close()
+        conn.close()
+
+    except Exception as e:
+        print("❌ Error creating admin:", str(e))
+
 
 
 
@@ -125,42 +340,49 @@ def register():
         password = request.form['password']
         user_type = request.form['user_type']  # student or admin
 
-        # Basic required fields check
+        # ✅ Basic required fields check
         if not name or not email or not password or not user_type:
             flash("All fields are required.", "danger")
             return redirect(url_for('register'))
 
-        # Phone number validation: must be 10 digits
+        # ✅ Phone number validation
         if not phone.isdigit() or len(phone) != 10:
             flash("Phone number must be exactly 10 digits.", "danger")
             return redirect(url_for('register'))
 
-        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-        # Hash the password
+        # ✅ Hash password
         hashed_password = generate_password_hash(password)
 
-        # Insert into new_users table
         try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Insert into new_users table
             cur.execute("""
                 INSERT INTO new_users (name, email, phone, course, password, user_type)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (name, email, phone, course, hashed_password, user_type))
-            mysql.connection.commit()
+            conn.commit()
+
             flash("Registration successful! Await admin approval.", "success")
-        except MySQLdb.Error as e:
+
+        except Exception as e:
             flash(f"Database error: {e}", "danger")
+
         finally:
-            cur.close()
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
         return redirect(url_for('login'))
 
     return render_template('register.html')
 
 
-
-
 # REPLACE your current /new_users route with this
+
+from psycopg2.extras import RealDictCursor
 
 @app.route('/new_users')
 @login_required
@@ -169,27 +391,51 @@ def new_users_list():
         flash("Unauthorized access!", "danger")
         return redirect(url_for('index'))
 
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cur.execute("SELECT * FROM new_users")
-    users = cur.fetchall()
-    cur.close()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute("SELECT * FROM new_users")
+        users = cur.fetchall()
+
+    except Exception as e:
+        flash(f"Database error: {e}", "danger")
+        users = []
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
     return render_template("new_users.html", users=users)
 
 
-
-
 # -------- LOGIN --------
+from psycopg2.extras import RealDictCursor
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
 
-        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
-        user = cur.fetchone()
-        cur.close()
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+
+            cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+            user = cur.fetchone()
+
+        except Exception as e:
+            flash(f"Database error: {e}", "danger")
+            return redirect(url_for('login'))
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
         if user and check_password_hash(user['password'], password):
             # Admin bypass approval check
@@ -214,48 +460,63 @@ def login():
 
 
 
+
 @app.route('/reset_admin')
 def reset_admin():
-    cur = mysql.connection.cursor()
-    hashed_password = generate_password_hash("admin123")
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    # Delete duplicates
-    cur.execute("DELETE FROM users WHERE email=%s", ("admin@example.com",))
+        hashed_password = generate_password_hash("admin123")
 
-    # Insert fresh admin
-    cur.execute("""
-        INSERT INTO users (name, email, phone, course, password, user_type, approved)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, ("Super Admin", "admin@example.com", "0000000000", "N/A",
-          hashed_password, "admin", 1))
-    mysql.connection.commit()
-    cur.close()
+        # Delete duplicates if any
+        cur.execute("DELETE FROM users WHERE email=%s", ("admin@example.com",))
 
-    return "✅ Admin reset: email=admin@example.com, password=admin123"
+        # Insert fresh admin
+        cur.execute("""
+            INSERT INTO users (name, email, phone, course, password, user_type, approved)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, ("Super Admin", "admin@example.com", "0000000000", "N/A",
+              hashed_password, "admin", 1))
+
+        conn.commit()
+        return "✅ Admin reset: email=admin@example.com, password=admin123"
+
+    except Exception as e:
+        return f"❌ Error resetting admin: {e}"
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 
 
 #Approval
 
-from flask import send_file
+from flask import send_file, flash, redirect, url_for
 import qrcode
 import io
 import os
-
-import qrcode, os
 from flask_login import login_required, current_user
+from psycopg2.extras import RealDictCursor
 
 @app.route('/approve_user/<int:user_id>')
 @login_required
 def approve_user(user_id):
-    if not current_user.is_admin:   # ensure only admin can approve
+    if not getattr(current_user, "is_admin", False):   # ensure only admin can approve
         flash("❌ Unauthorized", "danger")
         return redirect(url_for('user_dashboard'))
 
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    conn = None
+    cur = None
 
     try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
         # 1. Fetch user details from new_users
         cur.execute("SELECT * FROM new_users WHERE id = %s", (user_id,))
         user = cur.fetchone()
@@ -274,12 +535,13 @@ def approve_user(user_id):
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved, qr_path)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             user['name'], user['email'], user['phone'], user['course'],
             user['password'], user['user_type'], 1, ""
         ))
 
-        new_user_id = cur.lastrowid
+        new_user_id = cur.fetchone()['id']
 
         # 4. Generate QR Code
         qr_data = f"ID:{new_user_id}|Name:{user['name']}|Email:{user['email']}|Type:{user['user_type']}"
@@ -295,7 +557,7 @@ def approve_user(user_id):
         qr_path = os.path.join(qr_folder, qr_filename)
         img.save(qr_path)
 
-        # Store relative path so template can use {{ url_for('static', filename='qrcodes/xxx.png') }}
+        # Store relative path
         db_qr_path = f"qrcodes/{qr_filename}"
 
         # 5. Update QR path in users table
@@ -305,31 +567,61 @@ def approve_user(user_id):
         cur.execute("DELETE FROM new_users WHERE id=%s", (user_id,))
 
         # ✅ Commit once after all queries
-        mysql.connection.commit()
+        conn.commit()
 
         flash("✅ User approved successfully and QR code generated.", "success")
 
     except Exception as e:
-        mysql.connection.rollback()
+        if conn:
+            conn.rollback()
         flash(f"❌ Error approving user: {str(e)}", "danger")
         print("Approve user error:", e)  # debug log
 
     finally:
-        cur.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
     return redirect(url_for('new_users_list'))
 
 
-
+from psycopg2.extras import RealDictCursor
 
 @app.route('/reject_user/<int:user_id>')
+@login_required
 def reject_user(user_id):
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cur.execute("DELETE FROM new_users WHERE id = %s", (user_id,))
-    mysql.connection.commit()
-    cur.close()
-    flash("User rejected and removed.", "danger")
+    if not getattr(current_user, "is_admin", False):   # ensure only admin can reject
+        flash("❌ Unauthorized", "danger")
+        return redirect(url_for('user_dashboard'))
+
+    conn = None
+    cur = None
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Delete user from new_users
+        cur.execute("DELETE FROM new_users WHERE id = %s", (user_id,))
+        conn.commit()
+
+        flash("🚫 User rejected and removed.", "danger")
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        flash(f"❌ Error rejecting user: {str(e)}", "danger")
+        print("Reject user error:", e)  # debug log
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
     return redirect(url_for('new_users_list'))
+
 
 # -------- LOGOUT --------
 @app.route('/logout')
