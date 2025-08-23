@@ -13,6 +13,16 @@ from config import Config
 app = Flask(__name__)
 app.config.from_object(Config)
 
+
+
+class Config:
+    SECRET_KEY = 'your_secret_key_here'
+    MYSQL_HOST = 'localhost'
+    MYSQL_USER = 'your_mysql_user'
+    MYSQL_PASSWORD = 'your_mysql_password'
+    MYSQL_DB = 'your_database_name'
+
+
 mysql = MySQL(app)
 
 # ---------------- LOGIN MANAGER ----------------
