@@ -16,15 +16,16 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 
-
-class Config:
-    SECRET_KEY = 'your_secret_key_here'
-    MYSQL_HOST = 'localhost'
-    MYSQL_USER = 'your_mysql_user'
-    MYSQL_PASSWORD = 'your_mysql_password'
-    MYSQL_DB = 'your_database_name'
-
-
+def get_db_connection():
+    conn = psycopg2.connect(
+        host=Config.DB_HOST,
+        port=Config.DB_PORT,
+        database=Config.DB_NAME,
+        user=Config.DB_USER,
+        password=Config.DB_PASSWORD,
+        cursor_factory=RealDictCursor
+    )
+    return conn
 mysql = MySQL(app)
 
 # ---------------- LOGIN MANAGER ----------------
