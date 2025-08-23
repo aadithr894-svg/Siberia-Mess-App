@@ -11,16 +11,7 @@ import os
 
 # ---------------- Flask App ----------------
 app = Flask(__name__)
-app.secret_key = 'supersecretkey'
-
-# ---------------- MySQL CONFIG ----------------
-app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST')
-app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER')
-app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD')
-app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB')
-app.config['MYSQL_CURSORCLASS'] = os.environ.get('MYSQL_CURSORCLASS', 'DictCursor')
-app.config['MYSQL_PORT'] = int(os.environ.get('MYSQL_PORT', 3306))
-SECRET_KEY = os.environ.get('SECRET_KEY', 'supersecretkey')
+app.config.from_object(Config)
 
 mysql = MySQL(app)
 
@@ -969,9 +960,6 @@ def approve_late(late_mess_id):
 
 # ----------------- START APP -----------------
 # ----------------- START APP -----------------
-@app.got_first_request
-def initialize():
-    create_admin()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
