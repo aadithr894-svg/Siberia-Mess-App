@@ -8,10 +8,10 @@ import io
 import base64
 from datetime import datetime, time
 import os
-from config import Config
+from config import config
 # ---------------- Flask App ----------------
 app = Flask(__name__)
-app.config.from_object(Config)
+app.config.from_object(config)
 
 
 
