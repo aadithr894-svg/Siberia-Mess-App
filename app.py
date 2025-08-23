@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
-from flask_mysqldb import MySQL
+
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import MySQLdb.cursors
@@ -57,7 +57,7 @@ def load_user(user_id):
 # ---------------- CREATE ADMIN ----------------
 # ---------------- CREATE ADMIN ----------------
 from flask import Flask
-from flask_mysqldb import MySQL
+
 from werkzeug.security import generate_password_hash
 import MySQLdb
 
