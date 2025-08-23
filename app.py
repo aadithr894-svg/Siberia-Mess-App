@@ -126,30 +126,46 @@ def register():
     return render_template('register.html')
 
 # -------- LOGIN --------
-@app.route('/login', methods=['GET','POST'])
+from psycopg2.extras import RealDictCursor
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
 
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
-        user = cur.fetchone()
-        cur.close()
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+
+            cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+            user = cur.fetchone()
+
+        except Exception as e:
+            flash(f"Database error: {e}", "danger")
+            return redirect(url_for('login'))
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
         if user and check_password_hash(user['password'], password):
-            if user['user_type'] != "admin" and not user['approved']:
+            # Admin bypass approval check
+            if user['user_type'] != "admin" and user['approved'] == 0:
                 flash("Your account is awaiting admin approval.", "warning")
                 return redirect(url_for('login'))
+
             login_user(User(user['id'], user['name'], user['email'], user['user_type']))
             flash("Login successful!", "success")
-            if user['user_type'] == 'admin':
+
+            if user['user_type'] == "admin":
                 return redirect(url_for('admin_dashboard'))
             else:
                 return redirect(url_for('user_dashboard'))
         else:
-            flash("Invalid credentials.", "danger")
+            flash("Invalid credentials", "danger")
             return redirect(url_for('login'))
 
     return render_template('login.html')
@@ -354,49 +370,7 @@ def new_users_list():
 
 
 # -------- LOGIN --------
-from psycopg2.extras import RealDictCursor
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
-
-            cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-            user = cur.fetchone()
-
-        except Exception as e:
-            flash(f"Database error: {e}", "danger")
-            return redirect(url_for('login'))
-
-        finally:
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()
-
-        if user and check_password_hash(user['password'], password):
-            # Admin bypass approval check
-            if user['user_type'] != "admin" and user['approved'] == 0:
-                flash("Your account is awaiting admin approval.", "warning")
-                return redirect(url_for('login'))
-
-            login_user(User(user['id'], user['name'], user['email'], user['user_type']))
-            flash("Login successful!", "success")
-
-            if user['user_type'] == "admin":
-                return redirect(url_for('admin_dashboard'))
-            else:
-                return redirect(url_for('user_dashboard'))
-        else:
-            flash("Invalid credentials", "danger")
-            return redirect(url_for('login'))
-
-    return render_template('login.html')
 
 
 
