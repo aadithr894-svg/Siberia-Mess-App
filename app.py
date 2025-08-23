@@ -6,6 +6,8 @@ from psycopg2.extras import RealDictCursor
 import qrcode
 import io
 import base64
+import pymysql
+pymysql.install_as_MySQLdb()
 import os
 from datetime import datetime, date, timedelta
 from config import Config
