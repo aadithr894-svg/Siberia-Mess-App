@@ -14,12 +14,12 @@ app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 
 # ---------------- MySQL CONFIG ----------------
-app.config['MYSQL_HOST'] = os.environ.get('dpg-d2kbemv5r7bs73eljh4g-a')
-app.config['MYSQL_USER'] = os.environ.get('siberia_mess_app_user')
-app.config['MYSQL_PASSWORD'] = os.environ.get('lfFfFk3uGBHj5nkdrowYYHMlVGzyUB0o')
-app.config['MYSQL_DB'] = os.environ.get('siberia_mess_app')
-app.config['MYSQL_CURSORCLASS'] = os.environ.get('DictCursor')
-app.config['MYSQL_PORT'] = int(os.environ.get('MYSQL_PORT',5432))
+app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST')
+app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER')
+app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD')
+app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB')
+app.config['MYSQL_CURSORCLASS'] = os.environ.get('MYSQL_CURSORCLASS', 'DictCursor')
+app.config['MYSQL_PORT'] = int(os.environ.get('MYSQL_PORT', 5432))
 
 mysql = MySQL(app)
 
@@ -95,8 +95,7 @@ def create_admin():
 # -----------------------------
 # Call this once at startup
 # -----------------------------
-with app.app_context():
-    create_admin()
+
 
 
 
@@ -969,8 +968,10 @@ def approve_late(late_mess_id):
 
 # ----------------- START APP -----------------
 # ----------------- START APP -----------------
+@app.before_first_request
+def initialize():
+    create_admin()
+
 if __name__ == '__main__':
-    app.run(debug=True)
-
-
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
 
