@@ -1,35 +1,3 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, g
-from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import qrcode
-import io
-import base64
-import pymysql
-pymysql.install_as_MySQLdb()
-import os
-from datetime import datetime, date, timedelta
-from config import Config
-# ---------------- Flask App ----------------
-app = Flask(__name__)
-app.config.from_object(Config)
-
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
-def get_db():
-    if 'db' not in g:
-        g.db = psycopg2.connect(
-            host=Config.DB_HOST,
-            port=Config.DB_PORT,
-            database=Config.DB_NAME,
-            user=Config.DB_USER,
-            password=Config.DB_PASSWORD,
-            cursor_factory=RealDictCursor
-        )
-    return g.db
 
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, g
