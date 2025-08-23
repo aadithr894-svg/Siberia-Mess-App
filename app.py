@@ -9,6 +9,8 @@ import base64
 from datetime import datetime, time
 import os
 from config import Config
+import psycopg2
+from psycopg2.extras import RealDictCursor
 # ---------------- Flask App ----------------
 app = Flask(__name__)
 app.config.from_object(Config)
