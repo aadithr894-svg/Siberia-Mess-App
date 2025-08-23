@@ -1,71 +1,104 @@
-
-
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, g
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
+from flask_mysqldb import MySQL
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import MySQLdb.cursors
 import qrcode
 import io
 import base64
-import os
-from datetime import datetime, date, timedelta
-from config import Config
+from datetime import datetime, time
 
 # ---------------- Flask App ----------------
 app = Flask(__name__)
-app.config.from_object(Config)
+app.secret_key = 'supersecretkey'
+
+# ---------------- MySQL CONFIG ----------------
+app.config['MYSQL_HOST'] = 'localhost'
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = 'mysql123'
+app.config['MYSQL_DB'] = 'siberia_mess_app'
+app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+
+mysql = MySQL(app)
 
 # ---------------- LOGIN MANAGER ----------------
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# ---------------- DATABASE CONNECTION ----------------
-def get_db():
-    if 'db' not in g:
-        g.db = psycopg2.connect(
-            host=Config.DB_HOST,
-            port=Config.DB_PORT,
-            database=Config.DB_NAME,
-            user=Config.DB_USER,
-            password=Config.DB_PASSWORD,
-            cursor_factory=RealDictCursor
-        )
-    return g.db
+# ---------------- USER CLASS ----------------
+class User(UserMixin):
+    def __init__(self, id, name, email, user_type):
+        self.id = id
+        self.name = name
+        self.email = email
+        self.user_type = user_type
+        self.is_admin = user_type == 'admin'
 
-@app.teardown_appcontext
-def close_db(e=None):
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
-
+        
 @login_manager.user_loader
 def load_user(user_id):
-    conn = get_db()
-    cur = conn.cursor()
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
     data = cur.fetchone()
     cur.close()
     if data:
-        return User(data['id'], data['name'], data['email'], data['user_type'])
+        return User(data['id'], data['name'], data['email'], data['user_type'])  # ✅ fixed column
     return None
 
-# ---------------- CREATE DEFAULT ADMIN ----------------
+# ---------------- CREATE ADMIN ----------------
+# ---------------- CREATE ADMIN ----------------
+# ---------------- CREATE ADMIN ----------------
+from flask import Flask
+from flask_mysqldb import MySQL
+from werkzeug.security import generate_password_hash
+import MySQLdb
+
+
+# -----------------------------
+# Function to create default admin
+# -----------------------------
+# ---------------- CREATE ADMIN ----------------
 def create_admin():
-    conn = get_db()
-    cur = conn.cursor()
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Check if admin already exists
     cur.execute("SELECT * FROM users WHERE email = %s", ("admin@example.com",))
     admin = cur.fetchone()
+
     hashed_password = generate_password_hash("admin123")
+
     if not admin:
+        # Insert new admin
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
-        """, ("Super Admin", "admin@example.com", "0000000000", "N/A", hashed_password, "admin", True))
-        conn.commit()
-        print("✅ Default admin created")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, ("Super Admin", "admin@example.com", "0000000000", "N/A", hashed_password, "admin", 1))
+        mysql.connection.commit()
+        print("✅ Default admin created: email=admin@example.com, password=admin123")
+    else:
+        # Make sure admin is approved and user_type is admin
+        cur.execute("""
+            UPDATE users
+            SET user_type=%s, approved=%s, password=%s
+            WHERE email=%s
+        """, ("admin", 1, hashed_password, "admin@example.com"))
+        mysql.connection.commit()
+        print("ℹ️ Admin already exists. Reset password and ensured approved=1.")
+
     cur.close()
+
+
+
+# -----------------------------
+# Call this once at startup
+# -----------------------------
+with app.app_context():
+    create_admin()
+
+
+
+
 
 
 # ---------------- ROUTES ----------------
@@ -86,70 +119,71 @@ def register():
         password = request.form['password']
         user_type = request.form['user_type']  # student or admin
 
-        # ✅ Basic required fields check
+        # Basic required fields check
         if not name or not email or not password or not user_type:
             flash("All fields are required.", "danger")
             return redirect(url_for('register'))
 
-        # ✅ Phone number validation
+        # Phone number validation: must be 10 digits
         if not phone.isdigit() or len(phone) != 10:
             flash("Phone number must be exactly 10 digits.", "danger")
             return redirect(url_for('register'))
 
-        # ✅ Hash password
+        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        # Hash the password
         hashed_password = generate_password_hash(password)
 
+        # Insert into new_users table
         try:
-            conn = get_db_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
-
-            # Insert into new_users table
             cur.execute("""
                 INSERT INTO new_users (name, email, phone, course, password, user_type)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (name, email, phone, course, hashed_password, user_type))
-            conn.commit()
-
+            mysql.connection.commit()
             flash("Registration successful! Await admin approval.", "success")
-
-        except Exception as e:
+        except MySQLdb.Error as e:
             flash(f"Database error: {e}", "danger")
-
         finally:
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()
+            cur.close()
 
         return redirect(url_for('login'))
 
     return render_template('register.html')
 
-# -------- LOGIN --------
-from psycopg2.extras import RealDictCursor
 
+
+
+# REPLACE your current /new_users route with this
+
+@app.route('/new_users')
+@login_required
+def new_users_list():
+    if not current_user.is_admin:
+        flash("Unauthorized access!", "danger")
+        return redirect(url_for('index'))
+
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cur.execute("SELECT * FROM new_users")
+    users = cur.fetchall()
+    cur.close()
+
+    return render_template("new_users.html", users=users)
+
+
+
+
+# -------- LOGIN --------
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
 
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
-
-            cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-            user = cur.fetchone()
-
-        except Exception as e:
-            flash(f"Database error: {e}", "danger")
-            return redirect(url_for('login'))
-
-        finally:
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()
+        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+        user = cur.fetchone()
+        cur.close()
 
         if user and check_password_hash(user['password'], password):
             # Admin bypass approval check
@@ -170,255 +204,52 @@ def login():
 
     return render_template('login.html')
 
-# -------- USER DASHBOARD --------
-@app.route('/dashboard')
-@login_required
-def user_dashboard():
-    # Generate QR
-    qr = qrcode.QRCode(box_size=10, border=5)
-    qr.add_data(str(current_user.id))
-    qr.make(fit=True)
-    img = qr.make_image(fill='black', back_color='white')
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    qr_code_b64 = base64.b64encode(buffer.getvalue()).decode('ascii')
-
-    # Connect to Postgres
-    conn = get_db()
-    cur = conn.cursor()
-
-    # Fetch late mess requests for the logged-in user
-    cur.execute("""
-        SELECT id, user_id, date_requested, status
-        FROM late_mess
-        WHERE user_id = %s
-        ORDER BY date_requested DESC
-    """, (current_user.id,))
-
-    late_requests = cur.fetchall()
-
-    cur.close()
-    conn.close()
-
-    return render_template('dashboard.html', qr_code=qr_code_b64, late_requests=late_requests)
-
-
-
-
-
-# -------- LOGOUT --------
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    flash("Logged out successfully", "info")
-    return redirect(url_for('index'))
-
-
-
-
-
-
-# ---------------- LOGIN MANAGER ----------------
-login_manager = LoginManager()
-login_manager.login_view = "login"   # Redirects to 'login' if not logged in
-login_manager.login_message_category = "info"  # Bootstrap-friendly flash category
-login_manager.init_app(app)
-
-# ---------------- USER CLASS ----------------
-class User(UserMixin):
-    def __init__(self, id, name, email, user_type):
-        self.id = id
-        self.name = name
-        self.email = email
-        self.user_type = user_type
-        self.is_admin = user_type == 'admin'
-
-        
-@login_manager.user_loader
-def load_user(user_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT id, name, email, user_type FROM users WHERE id = %s",
-        (user_id,)
-    )
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-
-    if row:
-        return User(*row)  # maps to id, name, email, user_type
-    return None
-
-# ---------------- CREATE ADMIN ----------------
-# ---------------- CREATE ADMIN ----------------
-# ---------------- CREATE ADMIN ----------------
-from flask import Flask
-
-from werkzeug.security import generate_password_hash
-import MySQLdb
-
-
-# -----------------------------
-# Function to create default admin
-# -----------------------------
-# ---------------- CREATE ADMIN ----------------
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from werkzeug.security import generate_password_hash
-
-def create_admin():
-    try:
-        conn = psycopg2.connect(
-            host="dpg-d2kbemv5r7bs73eljh4g-a",   # Render internal hostname
-            database="siberia_mess_app",
-            user="siberia_mess_app_user",
-            password="lfFfFk3uGBHj5nkdrowYYHMlVGzyUB0o",
-            port=5432
-        )
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-
-        # Check if admin already exists
-        cur.execute("SELECT * FROM users WHERE email = %s", ("admin@example.com",))
-        admin = cur.fetchone()
-
-        hashed_password = generate_password_hash("admin123")
-
-        if not admin:
-            # Insert new admin
-            cur.execute("""
-                INSERT INTO users (name, email, phone, course, password, user_type, approved)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, ("Super Admin", "admin@example.com", "0000000000", "N/A", hashed_password, "admin", 1))
-            conn.commit()
-            print("✅ Default admin created: email=admin@example.com, password=admin123")
-        else:
-            # Make sure admin is approved and user_type is admin
-            cur.execute("""
-                UPDATE users
-                SET user_type=%s, approved=%s, password=%s
-                WHERE email=%s
-            """, ("admin", 1, hashed_password, "admin@example.com"))
-            conn.commit()
-            print("ℹ️ Admin already exists. Reset password and ensured approved=1.")
-
-        cur.close()
-        conn.close()
-
-    except Exception as e:
-        print("❌ Error creating admin:", str(e))
-
-
-
-
-# -----------------------------
-# Call this once at startup
-# -----------------------------
-
-
-
-
-
-
-
-
-
-# REPLACE your current /new_users route with this
-
-from psycopg2.extras import RealDictCursor
-
-@app.route('/new_users')
-@login_required
-def new_users_list():
-    if not current_user.is_admin:
-        flash("Unauthorized access!", "danger")
-        return redirect(url_for('index'))
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-
-        cur.execute("SELECT * FROM new_users")
-        users = cur.fetchall()
-
-    except Exception as e:
-        flash(f"Database error: {e}", "danger")
-        users = []
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
-
-    return render_template("new_users.html", users=users)
-
-
-# -------- LOGIN --------
-
-
-
 
 
 
 
 @app.route('/reset_admin')
 def reset_admin():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = mysql.connection.cursor()
+    hashed_password = generate_password_hash("admin123")
 
-        hashed_password = generate_password_hash("admin123")
+    # Delete duplicates
+    cur.execute("DELETE FROM users WHERE email=%s", ("admin@example.com",))
 
-        # Delete duplicates if any
-        cur.execute("DELETE FROM users WHERE email=%s", ("admin@example.com",))
+    # Insert fresh admin
+    cur.execute("""
+        INSERT INTO users (name, email, phone, course, password, user_type, approved)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, ("Super Admin", "admin@example.com", "0000000000", "N/A",
+          hashed_password, "admin", 1))
+    mysql.connection.commit()
+    cur.close()
 
-        # Insert fresh admin
-        cur.execute("""
-            INSERT INTO users (name, email, phone, course, password, user_type, approved)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, ("Super Admin", "admin@example.com", "0000000000", "N/A",
-              hashed_password, "admin", 1))
-
-        conn.commit()
-        return "✅ Admin reset: email=admin@example.com, password=admin123"
-
-    except Exception as e:
-        return f"❌ Error resetting admin: {e}"
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+    return "✅ Admin reset: email=admin@example.com, password=admin123"
 
 
 
 
 #Approval
 
-from flask import send_file, flash, redirect, url_for
+from flask import send_file
 import qrcode
 import io
 import os
+
+import qrcode, os
 from flask_login import login_required, current_user
-from psycopg2.extras import RealDictCursor
 
 @app.route('/approve_user/<int:user_id>')
 @login_required
 def approve_user(user_id):
-    if not getattr(current_user, "is_admin", False):   # ensure only admin can approve
+    if not current_user.is_admin:   # ensure only admin can approve
         flash("❌ Unauthorized", "danger")
         return redirect(url_for('user_dashboard'))
 
-    conn = None
-    cur = None
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-
         # 1. Fetch user details from new_users
         cur.execute("SELECT * FROM new_users WHERE id = %s", (user_id,))
         user = cur.fetchone()
@@ -437,13 +268,12 @@ def approve_user(user_id):
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved, qr_path)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
         """, (
             user['name'], user['email'], user['phone'], user['course'],
             user['password'], user['user_type'], 1, ""
         ))
 
-        new_user_id = cur.fetchone()['id']
+        new_user_id = cur.lastrowid
 
         # 4. Generate QR Code
         qr_data = f"ID:{new_user_id}|Name:{user['name']}|Email:{user['email']}|Type:{user['user_type']}"
@@ -459,7 +289,7 @@ def approve_user(user_id):
         qr_path = os.path.join(qr_folder, qr_filename)
         img.save(qr_path)
 
-        # Store relative path
+        # Store relative path so template can use {{ url_for('static', filename='qrcodes/xxx.png') }}
         db_qr_path = f"qrcodes/{qr_filename}"
 
         # 5. Update QR path in users table
@@ -469,108 +299,81 @@ def approve_user(user_id):
         cur.execute("DELETE FROM new_users WHERE id=%s", (user_id,))
 
         # ✅ Commit once after all queries
-        conn.commit()
+        mysql.connection.commit()
 
         flash("✅ User approved successfully and QR code generated.", "success")
 
     except Exception as e:
-        if conn:
-            conn.rollback()
+        mysql.connection.rollback()
         flash(f"❌ Error approving user: {str(e)}", "danger")
         print("Approve user error:", e)  # debug log
 
     finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        cur.close()
 
     return redirect(url_for('new_users_list'))
 
 
-from psycopg2.extras import RealDictCursor
+
 
 @app.route('/reject_user/<int:user_id>')
-@login_required
 def reject_user(user_id):
-    if not getattr(current_user, "is_admin", False):   # ensure only admin can reject
-        flash("❌ Unauthorized", "danger")
-        return redirect(url_for('user_dashboard'))
-
-    conn = None
-    cur = None
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-
-        # Delete user from new_users
-        cur.execute("DELETE FROM new_users WHERE id = %s", (user_id,))
-        conn.commit()
-
-        flash("🚫 User rejected and removed.", "danger")
-
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        flash(f"❌ Error rejecting user: {str(e)}", "danger")
-        print("Reject user error:", e)  # debug log
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
-
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cur.execute("DELETE FROM new_users WHERE id = %s", (user_id,))
+    mysql.connection.commit()
+    cur.close()
+    flash("User rejected and removed.", "danger")
     return redirect(url_for('new_users_list'))
 
+# -------- LOGOUT --------
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash("Logged out successfully", "info")
+    return redirect(url_for('index'))
 
-
-
-
+# -------- USER DASHBOARD --------
+@app.route('/dashboard')
+@login_required
+def user_dashboard():
+    # Generate QR code
+    qr = qrcode.QRCode(box_size=10, border=5)
+    qr.add_data(str(current_user.id))
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
     
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    qr_code_b64 = base64.b64encode(buffer.getvalue()).decode('ascii')
+
+    # Fetch late mess requests
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cur.execute("SELECT * FROM late_mess WHERE user_id = %s ORDER BY date DESC", (current_user.id,))
+    late_requests = cur.fetchall()
+    cur.close()
+
+    return render_template('dashboard.html', qr_code=qr_code_b64, late_requests=late_requests)
+
 # -------- ADMIN DASHBOARD --------
 @app.route('/admin')
 @login_required
 def admin_dashboard():
     if not current_user.is_admin:
-        flash("Unauthorized access", "danger")
+        flash("Unauthorized", "danger")
         return redirect(url_for('user_dashboard'))
-
-    # Example: fetch all late mess requests for admin view
-    conn = get_db()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("""
-        SELECT lm.id, lm.date, u.name AS user_name, u.email
-        FROM late_mess lm
-        JOIN users u ON lm.user_id = u.id
-        ORDER BY lm.date DESC
-    """)
-    all_requests = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    return render_template("admin_base.html", all_requests=all_requests)
-
+    return render_template('admin_base.html')
 
 
 # -------- ADMIN: USERS LIST --------
 @app.route('/admin/users')
 @login_required
 def users_list():
-    if not current_user.is_admin:
-        flash("Unauthorized access", "danger")
-        return redirect(url_for('user_dashboard'))
-
-    conn = get_db()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT id, name, email, course, phone FROM users ORDER BY id ASC")
+    cur = mysql.connection.cursor()
+    cur.execute("SELECT id, name, email,course,phone FROM users")
     users = cur.fetchall()
     cur.close()
-    conn.close()
-
-    return render_template("admin_users.html", users=users)
-
+    return render_template('admin_users.html', users=users)
 
 
 
@@ -580,18 +383,15 @@ def users_list():
 def delete_user(user_id):
     if not current_user.is_admin:
         flash("Unauthorized", "danger")
-        return redirect(url_for("user_dashboard"))
+        return redirect(url_for('user_dashboard'))
 
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
-    conn.commit()
+    cur = mysql.connection.cursor()
+    cur.execute("DELETE FROM users WHERE id=%s", (user_id,))
+    mysql.connection.commit()
     cur.close()
-    conn.close()
-
     flash("User deleted successfully", "success")
-    return redirect(url_for("users_list"))
-
+    # FIX: use the correct endpoint name
+    return redirect(url_for('users_list'))
 
 
 
@@ -602,24 +402,8 @@ def delete_user(user_id):
 def admin_qr_scan():
     if not current_user.is_admin:
         flash("Unauthorized", "danger")
-        return redirect(url_for("user_dashboard"))
-
-    # In future: you could preload recent scans or logs from DB here
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT u.id, u.name, u.email, l.date
-        FROM late_mess l
-        JOIN users u ON l.user_id = u.id
-        ORDER BY l.date DESC
-        LIMIT 10
-    """)
-    recent_scans = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    return render_template("admin_qr_scan.html", recent_scans=recent_scans)
-
+        return redirect(url_for('user_dashboard'))
+    return render_template('admin_qr_scan.html')
 
 
 
@@ -628,26 +412,20 @@ def admin_qr_scan():
 @app.route('/my_mess_cuts')
 @login_required
 def my_mess_cuts():
-    conn = get_db()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute(
-        "SELECT * FROM mess_cut WHERE user_id = %s ORDER BY start_date DESC",
-        (current_user.id,)
-    )
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cur.execute("SELECT * FROM mess_cut WHERE user_id=%s ORDER BY start_date DESC", (current_user.id,))
     cuts = cur.fetchall()
     cur.close()
-    conn.close()
 
     # Convert start_date/end_date to date objects and calculate number of days
     for cut in cuts:
-        if isinstance(cut["start_date"], str):
-            cut["start_date"] = datetime.strptime(cut["start_date"], "%Y-%m-%d").date()
-        if isinstance(cut["end_date"], str):
-            cut["end_date"] = datetime.strptime(cut["end_date"], "%Y-%m-%d").date()
-        cut["num_days"] = (cut["end_date"] - cut["start_date"]).days + 1
+        if isinstance(cut['start_date'], str):
+            cut['start_date'] = datetime.strptime(cut['start_date'], "%Y-%m-%d").date()
+        if isinstance(cut['end_date'], str):
+            cut['end_date'] = datetime.strptime(cut['end_date'], "%Y-%m-%d").date()
+        cut['num_days'] = (cut['end_date'] - cut['start_date']).days + 1
 
-    return render_template("my_mess_cuts.html", cuts=cuts)
-
+    return render_template('my_mess_cuts.html', cuts=cuts)
 
 
 
@@ -655,7 +433,6 @@ def my_mess_cuts():
 
 
 from flask import request, jsonify
-import psycopg2.extras
 
 @app.route('/admin/validate_qr', methods=['POST'])
 @login_required
@@ -666,69 +443,42 @@ def validate_qr():
     data = request.get_json()
     qr_data = data.get("qr_data", "")
 
-    # Expected format: "user_id:123,email:test@example.com"
+    # Assuming QR is "user_id:{id},email:{email}"
     try:
-        parts = dict(part.split(":", 1) for part in qr_data.split(","))
+        parts = dict(part.split(":") for part in qr_data.split(","))
         user_id = int(parts.get("user_id"))
-    except Exception:
+    except:
         return jsonify({"success": False, "message": "Invalid QR code"}), 400
 
-    # Check if user exists in DB
-    conn = get_db()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute("SELECT id, name, email FROM users WHERE id = %s", (user_id,))
+    # Check user exists
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
     user = cur.fetchone()
     cur.close()
-    conn.close()
 
     if user:
-        # Example: Mark attendance (optional)
-        # cur.execute("INSERT INTO attendance (user_id, scan_time) VALUES (%s, NOW())", (user_id,))
-        # conn.commit()
-
-        return jsonify({
-            "success": True,
-            "message": f"{user['name']} ({user['email']}) is valid."
-        })
+        # Optional: update attendance or mess count
+        return jsonify({"success": True, "message": f"{user['name']} is valid."})
     else:
         return jsonify({"success": False, "message": "User not found."})
 
 
 
 
-from datetime import datetime, timedelta, date
-from flask import Flask
+from datetime import datetime, timedelta
 
 @app.template_filter('add_days')
 def add_days_filter(value, days):
-    """
-    Add `days` to a date (string in YYYY-MM-DD, datetime, or date object).
-    Returns ISO format string (YYYY-MM-DD).
-    Compatible with PostgreSQL date formats.
-    """
-    if isinstance(value, str):
-        # PostgreSQL often returns date strings as 'YYYY-MM-DD'
-        dt = datetime.strptime(value, "%Y-%m-%d").date()
-    elif isinstance(value, datetime):
-        dt = value.date()
-    elif isinstance(value, date):
-        dt = value
-    else:
-        raise ValueError("Unsupported date type for add_days filter")
-
-    return (dt + timedelta(days=int(days))).isoformat()
+    """Add `days` to a date string in YYYY-MM-DD format."""
+    dt = datetime.strptime(value, "%Y-%m-%d").date()
+    return (dt + timedelta(days=days)).isoformat()
 
 
-
-
+# -------- USER: MESS CUT --------
 from datetime import datetime, date, timedelta
 from flask import flash, redirect, url_for, render_template, request
 from flask_login import login_required, current_user
-import psycopg2
-from psycopg2.extras import RealDictCursor
-
-# assume you set up connection like:
-# pg_conn = psycopg2.connect(os.environ["DATABASE_URL"], cursor_factory=RealDictCursor)
+import MySQLdb
 
 @app.route('/apply_mess_cut', methods=['GET', 'POST'])
 @login_required
@@ -736,160 +486,139 @@ def apply_mess_cut():
     today = date.today()
     tomorrow = today + timedelta(days=1)
     current_time = datetime.now().time()
-    cutoff_time = datetime.strptime("22:00", "%H:%M").time()  # 10 PM cutoff
+    cutoff_time = datetime.strptime("22:00", "%H:%M").time()  # 10 PM
 
-    # Minimum end date = start_date + 2 days (so 3 consecutive days total)
-    min_end_date = today + timedelta(days=3)
+    # Minimum end date for 3-day range
+    min_end_date = today + timedelta(days=3)  # start date can be after today
 
     if request.method == 'POST':
         start_date_str = request.form.get('start_date')
         end_date_str = request.form.get('end_date')
 
-        # ✅ Validate inputs
         if not start_date_str or not end_date_str:
             flash("Start and end dates are required.", "danger")
             return redirect(url_for('apply_mess_cut'))
 
-        try:
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-        except ValueError:
-            flash("Invalid date format.", "danger")
-            return redirect(url_for('apply_mess_cut'))
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
 
-        # ✅ Prevent past or today’s dates
+        # Cannot select past dates
         if start_date <= today or end_date <= today:
             flash("Cannot select today or past dates.", "danger")
             return redirect(url_for('apply_mess_cut'))
 
-        # ✅ Cutoff check for tomorrow
+        # Cannot apply for tomorrow after 10 PM
         if start_date == tomorrow and current_time >= cutoff_time:
             flash("Cannot apply mess cut for tomorrow after 10 PM today.", "danger")
             return redirect(url_for('apply_mess_cut'))
 
-        # ✅ Minimum 3-day rule
+        # Minimum 3-day range
         if (end_date - start_date).days + 1 < 3:
             flash("Minimum duration is 3 consecutive days.", "danger")
             return redirect(url_for('apply_mess_cut'))
 
-        try:
-            cur = pg_conn.cursor(cursor_factory=RealDictCursor)
-
-            # ✅ Check overlapping requests
-            cur.execute("""
-                SELECT 1 FROM mess_cut
-                WHERE user_id=%s AND (
-                    (start_date <= %s AND end_date >= %s) OR
-                    (start_date <= %s AND end_date >= %s) OR
-                    (start_date >= %s AND end_date <= %s)
-                )
-            """, (current_user.id, start_date, start_date, end_date, end_date, start_date, end_date))
-            
-            if cur.fetchone():
-                flash("You already have a mess cut that overlaps these dates.", "danger")
-                cur.close()
-                return redirect(url_for('apply_mess_cut'))
-
-            # ✅ Fetch user’s course
-            cur.execute("SELECT course FROM users WHERE id=%s", (current_user.id,))
-            user = cur.fetchone()
-            if not user or not user.get('course'):
-                flash("Course not found. Please update your profile.", "danger")
-                cur.close()
-                return redirect(url_for('apply_mess_cut'))
-
-            course = user['course']
-
-            # ✅ Insert mess cut
-            cur.execute("""
-                INSERT INTO mess_cut (user_id, start_date, end_date, course, date_applied)
-                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (current_user.id, start_date, end_date, course))
-            pg_conn.commit()
-
-            flash("Mess cut applied successfully!", "success")
-            return redirect(url_for('my_mess_cuts'))
-        except psycopg2.Error as e:
-            flash(f"Database error: {e}", "danger")
-        finally:
+        # Check overlapping
+        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cur.execute("""
+            SELECT * FROM mess_cut
+            WHERE user_id=%s AND (
+                (start_date <= %s AND end_date >= %s) OR
+                (start_date <= %s AND end_date >= %s) OR
+                (start_date >= %s AND end_date <= %s)
+            )
+        """, (current_user.id, start_date, start_date, end_date, end_date, start_date, end_date))
+        overlapping = cur.fetchone()
+        if overlapping:
+            flash("You already have a mess cut that overlaps these dates.", "danger")
             cur.close()
             return redirect(url_for('apply_mess_cut'))
 
-    # ✅ GET request → render form
+        # Fetch user's course
+        cur.execute("SELECT course FROM users WHERE id=%s", (current_user.id,))
+        user = cur.fetchone()
+        if not user or not user.get('course'):
+            flash("Course not found. Please update your profile.", "danger")
+            cur.close()
+            return redirect(url_for('apply_mess_cut'))
+
+        course = user['course']
+
+        # Insert mess cut
+        try:
+            cur.execute("""
+                INSERT INTO mess_cut (user_id, start_date, end_date, course, date_applied)
+                VALUES (%s, %s, %s, %s, NOW())
+            """, (current_user.id, start_date, end_date, course))
+            mysql.connection.commit()
+            cur.close()
+            flash("Mess cut applied successfully!", "success")
+            return redirect(url_for('my_mess_cuts'))
+        except MySQLdb.Error as e:
+            flash(f"Database error: {e}", "danger")
+            cur.close()
+            return redirect(url_for('apply_mess_cut'))
+
+    # GET request: render form
     return render_template(
         'apply_mess_cut.html',
-        min_start_date=tomorrow.isoformat(),   # earliest = tomorrow
-        min_end_date=min_end_date.isoformat()  # ensures 3-day min
+        min_start_date=(today + timedelta(days=1)).isoformat(),  # can't select today
+        min_end_date=min_end_date.isoformat()
     )
 
 
+from datetime import datetime
 
 # ---------------- ADMIN: MESS CUT LIST ----------------
-from datetime import datetime, timedelta, date
-from flask import request, flash, redirect, url_for, render_template
-from flask_login import login_required, current_user
-import psycopg2
-from psycopg2.extras import RealDictCursor
+from datetime import datetime, timedelta
 
 @app.route('/admin/mess_cuts', methods=['GET'])
 @login_required
 def mess_cut_list():
-    if not getattr(current_user, "is_admin", False):
+    if not current_user.is_admin:
         flash("Unauthorized", "danger")
         return redirect(url_for('user_dashboard'))
 
-    # --- Handle month filter (default: current month) ---
-    try:
-        month_filter = request.args.get('month', datetime.now().strftime("%Y-%m"))
-        filter_year, filter_month = map(int, month_filter.split("-"))
-    except Exception:
-        flash("Invalid month format. Use YYYY-MM.", "danger")
-        return redirect(url_for('mess_cut_list'))
+    # Month filter for listing
+    month_filter = request.args.get('month', datetime.now().strftime("%Y-%m"))
+    filter_year, filter_month = map(int, month_filter.split("-"))
 
-    # --- Compute month start and end ---
-    month_start = date(filter_year, filter_month, 1)
-    if filter_month == 12:
-        next_month = date(filter_year + 1, 1, 1)
-    else:
-        next_month = date(filter_year, filter_month + 1, 1)
-    month_end = next_month - timedelta(days=1)
-
-    # --- Query mess cuts overlapping the selected month ---
-    conn = psycopg2.connect(current_app.config['DATABASE_URL'])
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     query = """
         SELECT m.user_id, u.name, u.course, m.start_date, m.end_date
         FROM mess_cut m
         JOIN users u ON m.user_id = u.id
-        WHERE m.start_date <= %s AND m.end_date >= %s
+        WHERE (m.start_date <= LAST_DAY(%s) AND m.end_date >= %s)
         ORDER BY u.name, m.start_date
     """
-    cur.execute(query, (month_end, month_start))
+    month_start = f"{filter_year}-{filter_month:02d}-01"
+    cur.execute(query, (month_start, month_start))
     cuts = cur.fetchall()
     cur.close()
-    conn.close()
 
-    # --- Process and group cuts by user ---
+    # Organize cuts by user
     cuts_by_user = {}
     for cut in cuts:
         user_id = cut['user_id']
         start_date = cut['start_date']
         end_date = cut['end_date']
 
-        # Ensure they are date objects
-        if isinstance(start_date, datetime):
-            start_date = start_date.date()
-        if isinstance(end_date, datetime):
-            end_date = end_date.date()
+        # Convert to datetime.date if needed
+        if isinstance(start_date, str):
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        if isinstance(end_date, str):
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
 
-        # Clip to current month
-        effective_start = max(start_date, month_start)
-        effective_end = min(end_date, month_end)
+        # Clip dates to selected month
+        month_start_date = datetime(filter_year, filter_month, 1).date()
+        next_month = datetime(filter_year + filter_month // 12, (filter_month % 12) + 1, 1).date()
+        month_end_date = next_month - timedelta(days=1)
+
+        effective_start = max(start_date, month_start_date)
+        effective_end = min(end_date, month_end_date)
         total_days = (effective_end - effective_start).days + 1
 
         if total_days <= 0:
-            continue
+            continue  # Skip if no overlap
 
         if user_id not in cuts_by_user:
             cuts_by_user[user_id] = {
@@ -906,14 +635,23 @@ def mess_cut_list():
         })
         cuts_by_user[user_id]["total_days"] += total_days
 
-    # --- Count mess cuts for tomorrow ---
+    # Calculate total number of mess cuts for tomorrow
     tomorrow = datetime.now().date() + timedelta(days=1)
-    tomorrow_count = sum(
-        1 for cut in cuts
-        if cut['start_date'] <= tomorrow <= cut['end_date']
-    )
+    tomorrow_count = 0
+    for cut in cuts:
+        start_date = cut['start_date']
+        end_date = cut['end_date']
 
-    # --- Render template ---
+        # Convert to date if needed
+        if isinstance(start_date, str):
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        if isinstance(end_date, str):
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+
+        if start_date <= tomorrow <= end_date:
+            tomorrow_count += 1
+
+    # Pass data to template
     return render_template(
         'mess_cut_list.html',
         cuts_by_user=cuts_by_user,
@@ -924,64 +662,46 @@ def mess_cut_list():
 
 
 
-# -------- USER: REQUEST LATE MESS (Postgres) --------
+# -------- USER: REQUEST LATE MESS --------
 from datetime import datetime, time
 from flask import flash, redirect, url_for, render_template, request
 from flask_login import login_required, current_user
-import psycopg2
-import psycopg2.extras
+import MySQLdb.cursors
+
+from datetime import datetime, time
 
 @app.route('/request_late_mess', methods=['GET', 'POST'])
 @login_required
 def request_late_mess():
-    now = datetime.now()
-    now_time = now.time()
-    today = now.date()
-
-    start_time = time(16, 0)   # 4:00 PM
-    end_time = time(20, 30)    # 8:30 PM
-
-    conn = get_db_connection()  # <-- make sure you have this helper
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    now_time = datetime.now().time()  # current time
+    start_time = time(16, 0)         # 4:00 PM
+    end_time = time(20, 30)          # 8:30 PM
 
     if request.method == 'POST':
         if not (start_time <= now_time <= end_time):
-            flash("Late mess can only be requested between 4:00 PM and 8:30 PM.", "danger")
-            cur.close()
-            conn.close()
+            flash("Late mess can only be requested between 4:00 PM and 8:30 PM", "danger")
             return redirect(url_for('request_late_mess'))
 
-        # --- Check if already requested today ---
+        cur = mysql.connection.cursor()
         cur.execute(
-            "SELECT id FROM late_mess WHERE user_id=%s AND date_requested=%s",
-            (current_user.id, today)
+            "INSERT INTO late_mess(user_id, date_requested) VALUES (%s, %s)",
+            (current_user.id, datetime.now().date())
         )
-        existing = cur.fetchone()
-
-        if existing:
-            flash("You have already requested late mess for today.", "warning")
-        else:
-            cur.execute(
-                "INSERT INTO late_mess (user_id, date_requested) VALUES (%s, %s)",
-                (current_user.id, today)
-            )
-            conn.commit()
-            flash("Late mess requested successfully.", "success")
-
+        mysql.connection.commit()
         cur.close()
-        conn.close()
+        flash("Late mess requested successfully", "success")
         return redirect(url_for('request_late_mess'))
 
-    # --- Fetch user’s request history ---
+    # Fetch user's late mess requests
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cur.execute(
         "SELECT * FROM late_mess WHERE user_id=%s ORDER BY date_requested DESC",
         (current_user.id,)
     )
     late_requests = cur.fetchall()
-
     cur.close()
-    conn.close()
 
+    # Pass the current time to template
     return render_template(
         'request_late_mess.html',
         late_requests=late_requests,
@@ -992,61 +712,30 @@ def request_late_mess():
 
 
 # -------- USER: GENERATE QR --------
-import qrcode
-import io
-import json
-from flask import send_file, flash, redirect, url_for
-from flask_login import login_required, current_user
-import psycopg2
-import psycopg2.extras
-from datetime import datetime
-
 @app.route('/my_qr')
 @login_required
 def my_qr():
-    try:
-        conn = get_db_connection()  # <-- Postgres helper
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    # Fetch current mess count from DB
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT mess_count FROM users WHERE id=%s", (current_user.id,))
+    data = cursor.fetchone()
+    mess_count = data['mess_count'] if data else 0
+    cursor.close()
 
-        cur.execute("SELECT mess_count FROM users WHERE id=%s", (current_user.id,))
-        data = cur.fetchone()
-        mess_count = data['mess_count'] if data else 0
-
-        cur.close()
-        conn.close()
-    except Exception as e:
-        flash("Error fetching mess count.", "danger")
-        return redirect(url_for('user_dashboard'))
-
-    # Add timestamp to make QR unique and time-bound
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    qr_data = {
-        "user_id": current_user.id,
-        "email": current_user.email,
-        "mess_count": mess_count,
-        "generated_at": timestamp
-    }
-
-    # Generate QR (store JSON instead of str(dict) for safe parsing)
+    qr_data = f"user_id:{current_user.id},email:{current_user.email},mess_count:{mess_count}"
+    
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
-    qr.add_data(json.dumps(qr_data))   # JSON string
+    qr.add_data(qr_data)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-
+    img = qr.make_image(fill='black', back_color='white')
     img_bytes = io.BytesIO()
-    img.save(img_bytes, format="PNG")
+    img.save(img_bytes, format='PNG')
     img_bytes.seek(0)
-
-    return send_file(img_bytes, mimetype="image/png")
+    return send_file(img_bytes, mimetype='image/png')
 
 
 # -------- ADMIN: SCAN QR AND INCREMENT MESS COUNT --------
 from datetime import date
-from flask import request, jsonify
-from flask_login import login_required, current_user
-import psycopg2
-import psycopg2.extras
 
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
@@ -1054,7 +743,7 @@ def scan_qr():
     if not current_user.is_admin:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    data = request.get_json() or {}
+    data = request.get_json()
     user_id = data.get('user_id')
     meal_type = data.get('meal_type')
     today = date.today()
@@ -1062,68 +751,34 @@ def scan_qr():
     if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
         return jsonify({'success': False, 'message': 'Invalid data'}), 400
 
-    conn, cur = None, None
     try:
-        conn = get_db_connection()  # 🔑 Helper for psycopg2 connection
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # --- Check if user exists ---
-        cur.execute("SELECT id, name FROM users WHERE id = %s", (user_id,))
-        user = cur.fetchone()
-        if not user:
-            return jsonify({'success': False, 'message': 'User not found'}), 404
-
-        # --- Check if already marked today ---
+        # Insert attendance (ignore duplicate)
         cur.execute("""
-            SELECT id FROM meal_attendance
-            WHERE user_id = %s AND meal_type = %s AND attendance_date = %s
-        """, (user_id, meal_type, today))
-        existing = cur.fetchone()
-
-        if existing:
-            return jsonify({'success': False, 'message': f"{user['name']} already marked for {meal_type}"}), 409
-
-        # --- Insert attendance ---
-        cur.execute("""
-            INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
+            INSERT IGNORE INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
         """, (user_id, meal_type, today))
-        conn.commit()
+        mysql.connection.commit()
 
-        # --- Count total attendance for this meal today ---
+        # Count total for this meal today
         cur.execute("""
-            SELECT COUNT(*) AS count
-            FROM meal_attendance
-            WHERE meal_type = %s AND attendance_date = %s
+            SELECT COUNT(*) AS count FROM meal_attendance
+            WHERE meal_type=%s AND attendance_date=%s
         """, (meal_type, today))
         result = cur.fetchone()
 
-        return jsonify({
-            'success': True,
-            'name': user['name'],
-            'meal_type': meal_type,
-            'count': result['count'],
-            'message': f"{user['name']} marked for {meal_type}"
-        })
+        cur.execute("SELECT name FROM users WHERE id=%s", (user_id,))
+        user = cur.fetchone()
+        cur.close()
 
-    except Exception as e:
-        if conn:
-            conn.rollback()  # rollback in case of error
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        return jsonify({'success': True, 'name': user['name'], 'count': result['count']})
+    except MySQLdb.Error as e:
+        return jsonify({'success': False, 'message': str(e)})
 
 
 
-from datetime import date
-from flask import request, jsonify
-from flask_login import login_required, current_user
-import psycopg2
-import psycopg2.extras
+
 
 @app.route('/admin/meal_counts')
 @login_required
@@ -1134,35 +789,21 @@ def meal_counts():
     month = request.args.get('month', date.today().strftime("%Y-%m"))
     year, month_num = map(int, month.split("-"))
 
-    conn, cur = None, None
-    try:
-        conn = get_db_connection()  # 🔑 helper function for psycopg2
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    counts = {}
 
-        counts = {}
-        for meal in ['breakfast', 'lunch', 'dinner']:
-            cur.execute("""
-                SELECT attendance_date, COUNT(*) AS total_users
-                FROM meal_attendance
-                WHERE meal_type = %s
-                  AND EXTRACT(YEAR FROM attendance_date) = %s
-                  AND EXTRACT(MONTH FROM attendance_date) = %s
-                GROUP BY attendance_date
-                ORDER BY attendance_date
-            """, (meal, year, month_num))
-            counts[meal] = [dict(row) for row in cur.fetchall()]
+    for meal in ['breakfast', 'lunch', 'dinner']:
+        cur.execute("""
+            SELECT attendance_date, COUNT(*) AS total_users
+            FROM meal_attendance
+            WHERE meal_type=%s AND YEAR(attendance_date)=%s AND MONTH(attendance_date)=%s
+            GROUP BY attendance_date
+            ORDER BY attendance_date
+        """, (meal, year, month_num))
+        counts[meal] = cur.fetchall()
 
-        return jsonify(counts)
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
-
+    cur.close()
+    return jsonify(counts)
 
 
 
@@ -1176,32 +817,26 @@ def qr_scan_count():
     if not current_user.is_admin:
         return jsonify({"error": "Unauthorized"}), 403
 
-    conn, cur = None, None
     try:
-        conn = get_db_connection()  # 🔑 helper function for psycopg2
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         # Count of users who scanned at least once
-        cur.execute("SELECT COUNT(*) AS scanned_users FROM users WHERE mess_count > 0")
+        cur.execute("SELECT COUNT(*) as scanned_users FROM users WHERE mess_count > 0")
         scanned_users = cur.fetchone()['scanned_users']
 
         # Total number of scans across all users
-        cur.execute("SELECT COALESCE(SUM(mess_count), 0) AS total_scans FROM users")
-        total_scans = cur.fetchone()['total_scans']
+        cur.execute("SELECT SUM(mess_count) as total_scans FROM users")
+        total_scans = cur.fetchone()['total_scans'] or 0
+
+        cur.close()
 
         return jsonify({
             "scanned_users": scanned_users,
             "total_scans": total_scans
         })
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+    except MySQLdb.Error as e:
+        return jsonify({"error": str(e)})
 
 
 
@@ -1211,67 +846,33 @@ def users_meal_counts():
     if not current_user.is_admin:
         return jsonify({'users': [], 'error': 'Unauthorized'}), 403
 
-    conn, cur = None, None
     try:
-        conn = get_db_connection()  # 🔑 Your psycopg2 connection helper
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
+        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cur.execute("""
             SELECT user_id, meal_type, scan_date, scan_count
             FROM user_meal_counts
         """)
         users = cur.fetchall()
-
-        return jsonify({'users': [dict(row) for row in users]})
-
-    except Exception as e:
-        return jsonify({'users': [], 'error': str(e)}), 500
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        cur.close()
+        return jsonify({'users': users})
+    except MySQLdb.Error as e:
+        return jsonify({'users': [], 'error': str(e)})
 
 
 
-from flask import jsonify
-from flask_login import login_required
-import psycopg2
-import psycopg2.extras
+
 
 @app.route('/admin/users_mess_count')
 @login_required
 def users_mess_count():
-    conn, cur = None, None
     try:
-        conn = get_db_connection()  # 🔑 your psycopg2 connection helper
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
+        cur = mysql.connection.cursor()
         cur.execute("SELECT name, email, user_type, mess_count FROM users")
         users = cur.fetchall()
-
-        return jsonify({
-            'users': [
-                {
-                    'name': u['name'],
-                    'email': u['email'],
-                    'user_type': u['user_type'],
-                    'mess_count': u['mess_count']
-                }
-                for u in users
-            ]
-        })
-
-    except Exception as e:
-        return jsonify({'users': [], 'error': str(e)}), 500
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
-
+        cur.close()
+        return jsonify({'users': [{'name': u[0], 'email': u[1], 'user_type': u[2], 'mess_count': u[3]} for u in users]})
+    except MySQLdb.Error as e:
+        return jsonify({'users': [], 'error': str(e)})
 
 
 
@@ -1281,41 +882,20 @@ def users_mess_count():
 def admin_validate_qr():
     if not current_user.is_admin:
         return jsonify({"success": False, "message": "Unauthorized"}), 403
-
     data = request.get_json()
     qr_data = data.get("qr_data")
-
-    # Try to parse QR data (expected JSON/dict string)
     try:
-        if isinstance(qr_data, str):
-            qr_dict = json.loads(qr_data.replace("'", '"'))  # handle dict-like strings
-        elif isinstance(qr_data, dict):
-            qr_dict = qr_data
-        else:
-            return jsonify({"success": False, "message": "Invalid QR format"}), 400
-
-        user_id = int(qr_dict.get("user_id"))
-    except Exception:
+        user_id = int(qr_data.split("user_id:")[1].split(",")[0])
+    except:
         return jsonify({"success": False, "message": "Invalid QR Code"}), 400
 
-    conn, cur = None, None
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+    cur = mysql.connection.cursor()
+    cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id = %s", (user_id,))
+    mysql.connection.commit()
+    cur.close()
+    return jsonify({"success": True, "message": f"Attendance recorded for user ID {user_id}"})
 
-        cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id = %s", (user_id,))
-        conn.commit()
 
-        return jsonify({"success": True, "message": f"Attendance recorded for user ID {user_id}"})
-
-    except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
 
 
 
@@ -1327,31 +907,21 @@ def late_mess_list():
     if not current_user.is_admin:
         return "Unauthorized", 403
 
-    conn, cur = None, None
-    late_mess_requests = []
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-        cur.execute("""
-            SELECT lm.id, u.name, u.email, lm.date_requested, lm.reason
-            FROM late_mess lm
-            JOIN users u ON u.id = lm.user_id
-            WHERE lm.status = 'pending'
-            ORDER BY lm.date_requested DESC
-        """)
-        late_mess_requests = cur.fetchall()
-
-    except Exception as e:
-        return f"Database error: {e}", 500
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+    cur = mysql.connection.cursor()
+    cur.execute("""
+        SELECT lm.id, u.name, u.email, lm.date_requested, lm.reason
+        FROM late_mess lm
+        JOIN users u ON u.id = lm.user_id
+        WHERE lm.status='pending'
+        ORDER BY lm.date_requested DESC
+    """)
+    late_mess_requests = cur.fetchall()
+    cur.close()
 
     return render_template('admin_late_mess.html', late_mess_requests=late_mess_requests)
+
+
+
 
 
 
@@ -1363,36 +933,19 @@ from flask import redirect, url_for, flash
 from flask_login import login_required, current_user
 
 # Reset Late Mess
-from flask import flash, redirect, url_for
-from flask_login import login_required, current_user
-
 @app.route('/admin/reset_late_mess', methods=['POST'])
 @login_required
 def reset_late_mess():
     if not current_user.is_admin:
         return "Unauthorized", 403
 
-    conn, cur = None, None
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("UPDATE late_mess SET status = 'reset' WHERE status = 'pending'")
-        conn.commit()
-        flash("Late mess requests have been reset.", "success")
-
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        flash(f"Error resetting late mess requests: {e}", "danger")
-
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
-
-    return redirect(url_for('late_mess_list'))  # ✅ Correct endpoint
-
+    cur = mysql.connection.cursor()
+    cur.execute("UPDATE late_mess SET status='reset' WHERE status='pending'")
+    mysql.connection.commit()
+    cur.close()
+    
+    flash("Late mess requests have been reset.", "success")
+    return redirect(url_for('late_mess_list'))  # Correct endpoint
 
 from flask import jsonify
 
@@ -1403,33 +956,19 @@ def approve_late(late_mess_id):
     if not current_user.is_admin:
         return jsonify({"success": False, "message": "Unauthorized"}), 403
 
-    conn, cur = None, None
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        cur.execute("UPDATE late_mess SET status = 'approved' WHERE id = %s", (late_mess_id,))
-        conn.commit()
-
+        cur = mysql.connection.cursor()
+        cur.execute("UPDATE late_mess SET approved=1 WHERE id=%s", (late_mess_id,))
+        mysql.connection.commit()
+        cur.close()
         return jsonify({"success": True, "message": "Late mess approved"})
-
     except Exception as e:
-        if conn:
-            conn.rollback()
         return jsonify({"success": False, "message": f"Error approving late mess: {str(e)}"}), 500
 
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
 # ----------------- START APP -----------------
 # ----------------- START APP -----------------
+if __name__ == '__main__':
+    app.run(debug=True)
 
-# ----------------- START APP -----------------
-if __name__ == "__main__":
-    # Only for local development
-    with app.app_context():
-        create_admin()   # Ensure default admin exists only once
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+
+
