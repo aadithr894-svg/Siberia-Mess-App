@@ -204,14 +204,6 @@ def user_dashboard():
 
 
 
-# -------- ADMIN DASHBOARD --------
-@app.route('/admin')
-@login_required
-def admin_dashboard():
-    if not getattr(current_user, "is_admin", False):
-        flash("Unauthorized", "danger")
-        return redirect(url_for('user_dashboard'))
-    return render_template('admin_base.html')
 
 
 # -------- LOGOUT --------
