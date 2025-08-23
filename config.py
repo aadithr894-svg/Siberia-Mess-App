@@ -1,9 +1,13 @@
+# config.py
+import os
+
 class Config:
-    SECRET_KEY = 'your_secret_key_here'
-    MYSQL_HOST = 'localhost'
-    MYSQL_USER = 'root'
-    MYSQL_PASSWORD = 'mysql123'
-    MYSQL_DB = 'siberia_mess_app'
-    MYSQL_PORT = 3306
-    SSL_CERT = 'cert.crt'
-    SSL_KEY = 'key.key'
+    # MySQL configuration from Render environment variables
+    MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
+    MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
+    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', '')
+    MYSQL_DB = os.environ.get('MYSQL_DB', 'mydatabase')
+    MYSQL_PORT = int(os.environ.get('MYSQL_PORT', 3306))  # default MySQL port
+
+    # Flask secret key (set this in Render as well)
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'supersecretkey')

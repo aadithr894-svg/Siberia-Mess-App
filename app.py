@@ -19,7 +19,8 @@ app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER')
 app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD')
 app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB')
 app.config['MYSQL_CURSORCLASS'] = os.environ.get('MYSQL_CURSORCLASS', 'DictCursor')
-app.config['MYSQL_PORT'] = int(os.environ.get('MYSQL_PORT', 5432))
+app.config['MYSQL_PORT'] = int(os.environ.get('MYSQL_PORT', 3306))
+SECRET_KEY = os.environ.get('SECRET_KEY', 'supersecretkey')
 
 mysql = MySQL(app)
 
@@ -968,7 +969,7 @@ def approve_late(late_mess_id):
 
 # ----------------- START APP -----------------
 # ----------------- START APP -----------------
-@app.before_first_request
+@app.got_first_request
 def initialize():
     create_admin()
 
