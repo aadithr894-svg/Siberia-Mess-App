@@ -30,8 +30,6 @@ def get_db():
     return g.db
 
 
-mysql = MySQL(app)
-
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, g
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
