@@ -13,11 +13,12 @@ app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 
 # ---------------- MySQL CONFIG ----------------
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'mysql123'
+app.config['MYSQL_HOST'] = 'dpg-d2kbemv5r7bs73eljh4g-a'
+app.config['MYSQL_USER'] = 'siberia_mess_app_user'
+app.config['MYSQL_PASSWORD'] = 'lfFfFk3uGBHj5nkdrowYYHMlVGzyUB0o'
 app.config['MYSQL_DB'] = 'siberia_mess_app'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+app.config['MYSQL_PORT'] =5432
 
 mysql = MySQL(app)
 
