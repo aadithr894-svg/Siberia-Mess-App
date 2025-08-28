@@ -3,66 +3,130 @@
 <div class="container mt-4">
   <h2>📡 QR Scanner</h2>
 
+  <!-- Date display -->
+  <div class="mb-3">
+    <strong>Today's Date:</strong> {{ current_date }}
+  </div>
+
   <!-- Inline message -->
   <div id="scanMessage" class="mb-3"></div>
+
+  <!-- Meal selector -->
+  <div class="mb-3">
+    <label for="mealType" class="form-label">Select Meal</label>
+    <select id="mealType" class="form-select">
+      <option value="breakfast">Breakfast (7:30 - 9:00)</option>
+      <option value="lunch">Lunch (12:00 - 14:00)</option>
+      <option value="dinner">Dinner (19:30 - 21:15)</option>
+    </select>
+  </div>
 
   <video id="preview" width="400" style="border:1px solid #ccc;"></video>
 
   <hr>
 
-  <!-- Scanned Users Today -->
-  <h4>Scanned Users Today</h4>
-  <table class="table table-bordered table-striped" id="scannedUsersTable">
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Name</th>
-        <th>Email</th>
-        <th>Course</th>
-        <th>Total Scans</th>
-      </tr>
-    </thead>
-    <tbody>
-      <!-- Rows will be populated by JS -->
-    </tbody>
-  </table>
+  <!-- Scanned Users Tables -->
+  <h4>Scanned Users</h4>
+  <div id="mealTables">
+    {% for meal in ['breakfast', 'lunch', 'dinner'] %}
+    <h5>{{ meal.capitalize() }}</h5>
+    <table class="table table-bordered table-striped" id="{{ meal }}Table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Course</th>
+          <th>Total Scans</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    {% endfor %}
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
 <script>
-  let scannedUsers = {};
+  const scannedUsers = {
+    breakfast: {},
+    lunch: {},
+    dinner: {}
+  };
+
+  const mealTimes = {
+    breakfast: { start: "07:30", end: "09:00" },
+    lunch: { start: "12:00", end: "14:00" },
+    dinner: { start: "19:30", end: "21:15" }
+  };
 
   const msgDiv = document.getElementById("scanMessage");
+  const mealSelect = document.getElementById("mealType");
+
+  function timeToMinutes(t) {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  function isWithinSlot(meal) {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const slot = mealTimes[meal];
+    return currentMinutes >= timeToMinutes(slot.start) && currentMinutes <= timeToMinutes(slot.end);
+  }
+
+  function renderTable(meal){
+    const tbody = document.querySelector(`#${meal}Table tbody`);
+    tbody.innerHTML = '';
+    let i = 1;
+    const today = new Date().toISOString().split('T')[0];
+    for(let key in scannedUsers[meal]){
+      let u = scannedUsers[meal][key];
+      tbody.innerHTML += `<tr>
+        <td>${i++}</td>
+        <td>${u.name}</td>
+        <td>${u.email}</td>
+        <td>${u.course}</td>
+        <td>${u.total_scans}</td>
+        <td>${today}</td>
+      </tr>`;
+    }
+  }
 
   // QR scanner
   let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
   scanner.addListener('scan', function(content) {
+      const selectedMeal = mealSelect.value;
+
+      if(!isWithinSlot(selectedMeal)){
+        msgDiv.innerHTML = `<span class="text-danger">❌ Cannot scan ${selectedMeal} outside its time slot.</span>`;
+        setTimeout(() => { msgDiv.innerHTML = ''; }, 3000);
+        return;
+      }
+
       fetch('/admin/scan_qr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ qr_data: content })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qr_data: content, meal_type: selectedMeal })
       })
       .then(res => res.json())
       .then(data => {
           if(data.success){
-              // Show inline success message
-              msgDiv.innerHTML = `<span class="text-success">✅ ${data.name} scanned successfully. Total: ${data.count}</span>`;
+              msgDiv.innerHTML = `<span class="text-success">✅ ${data.name} scanned for ${selectedMeal}. Total: ${data.count}</span>`;
 
-              // Update scannedUsers object
-              scannedUsers[data.name] = { 
-                  name: data.name, 
-                  email: '', // optional, fetch from server if needed
-                  course: '', // optional
-                  total_scans: data.count 
+              scannedUsers[selectedMeal][data.name] = {
+                name: data.name,
+                email: data.email || '',
+                course: data.course || '',
+                total_scans: data.count
               };
 
-              renderTable();
+              renderTable(selectedMeal);
           } else {
-              // Show inline error message
               msgDiv.innerHTML = `<span class="text-danger">❌ ${data.message}</span>`;
           }
 
-          // Clear message after 3 seconds
           setTimeout(() => { msgDiv.innerHTML = ''; }, 3000);
       })
       .catch(err => {
@@ -74,30 +138,11 @@
 
   // Start camera
   Instascan.Camera.getCameras().then(function (cameras) {
-      if (cameras.length > 0) {
-          scanner.start(cameras[0]);
-      } else {
-          msgDiv.innerHTML = `<span class="text-warning">⚠️ No cameras found.</span>`;
-      }
+      if (cameras.length > 0) scanner.start(cameras[0]);
+      else msgDiv.innerHTML = `<span class="text-warning">⚠️ No cameras found.</span>`;
   }).catch(function (e) {
       msgDiv.innerHTML = `<span class="text-danger">❌ ${e}</span>`;
       console.error(e);
   });
-
-  function renderTable(){
-      const tbody = document.querySelector('#scannedUsersTable tbody');
-      tbody.innerHTML = '';
-      let i = 1;
-      for(let key in scannedUsers){
-          let u = scannedUsers[key];
-          tbody.innerHTML += `<tr>
-              <td>${i++}</td>
-              <td>${u.name}</td>
-              <td>${u.email}</td>
-              <td>${u.course}</td>
-              <td>${u.total_scans}</td>
-          </tr>`;
-      }
-  }
 </script>
 {% endblock %}
