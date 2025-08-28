@@ -731,34 +731,32 @@ def my_qr():
 
 
 # -------- ADMIN: SCAN QR AND INCREMENT MESS COUNT --------
-from datetime import date
-
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
 def scan_qr():
     if not getattr(current_user, 'is_admin', False):
-        return jsonify({
-            'success': False,
-            'message': 'Unauthorized: current user is not admin',
-            'current_user_id': getattr(current_user, 'id', None),
-            'current_user_name': getattr(current_user, 'name', None),
-            'is_admin': getattr(current_user, 'is_admin', None)
-        }), 403
+        return jsonify({'success': False, 'message': 'Unauthorized: admin only'}), 403
 
     data = request.get_json(silent=True) or request.form
-    user_id = data.get('user_id')
+    qr_data = data.get('qr_data')       # updated from user_id
     meal_type = data.get('meal_type')
     
+    from datetime import date
     today = date.today()
 
-    if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
-        return jsonify({
-            'success': False,
-            'message': 'Invalid data: user_id or meal_type missing/invalid'
-        }), 400
+    if not qr_data or meal_type not in ['breakfast', 'lunch', 'dinner']:
+        return jsonify({'success': False, 'message': 'Invalid data: qr_data or meal_type missing/invalid'}), 400
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        # Look up user by QR data
+        cur.execute("SELECT id, name, email, course FROM users WHERE qr_code=%s", (qr_data,))
+        user = cur.fetchone()
+        if not user:
+            return jsonify({'success': False, 'message': f'User with QR "{qr_data}" not found'}), 404
+
+        user_id = user['id']
 
         # Insert attendance (ignore duplicates)
         cur.execute("""
@@ -773,14 +771,7 @@ def scan_qr():
             WHERE meal_type=%s AND attendance_date=%s
         """, (meal_type, today))
         result = cur.fetchone()
-
-        # Get full user info
-        cur.execute("SELECT name, email, course FROM users WHERE id=%s", (user_id,))
-        user = cur.fetchone()
         cur.close()
-
-        if not user:
-            return jsonify({'success': False, 'message': f'User with id {user_id} not found'}), 404
 
         return jsonify({
             'success': True,
@@ -792,7 +783,6 @@ def scan_qr():
 
     except MySQLdb.Error as e:
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
-
 
 @app.route('/admin/meal_counts')
 @login_required
@@ -865,20 +855,32 @@ def qr_scan_counts():
 @app.route('/admin/users_meal_counts')
 @login_required
 def users_meal_counts():
-    if not current_user.is_admin:
-        return jsonify({'users': [], 'error': 'Unauthorized'}), 403
+    if not getattr(current_user, 'is_admin', False):
+        return jsonify({'error': 'Unauthorized: admin only'}), 403
+
+    from datetime import date
+    today = date.today()
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cur.execute("""
-            SELECT user_id, meal_type, scan_date, scan_count
-            FROM user_meal_counts
-        """)
-        users = cur.fetchall()
+        counts = {}
+
+        for meal in ['breakfast', 'lunch', 'dinner']:
+            cur.execute("""
+                SELECT u.name, u.email, u.course, COUNT(ma.id) AS total_scans
+                FROM meal_attendance ma
+                JOIN users u ON ma.user_id = u.id
+                WHERE ma.meal_type=%s AND ma.attendance_date=%s
+                GROUP BY ma.user_id
+            """, (meal, today))
+            counts[meal] = cur.fetchall()
+
         cur.close()
-        return jsonify({'users': users})
+        return jsonify({'success': True, 'data': counts})
+
     except MySQLdb.Error as e:
-        return jsonify({'users': [], 'error': str(e)})
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+
 
 
 
