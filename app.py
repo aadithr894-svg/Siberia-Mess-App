@@ -67,7 +67,7 @@ def create_admin():
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, ("Super Admin", "admin@example.com", "0000000000", "N/A", hashed_password, "admin", 1))
+        """, ("Super Admin", "admin@example.com", "0000000000", "N/A", hashed_password, "Inmate", 1))
         mysql.connection.commit()
         print("✅ Default admin created: email=admin@example.com, password=admin123")
     else:
