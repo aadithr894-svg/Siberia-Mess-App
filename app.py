@@ -364,9 +364,10 @@ def admin_dashboard():
 @app.route('/admin/users')
 @login_required
 def users_list():
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT id, name, email,course,phone FROM users")
-    users = cur.fetchall()
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT * FROM users")
+    users = cursor.fetchall()
+
     cur.close()
     return render_template('admin_users.html', users=users)
 
