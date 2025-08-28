@@ -2,7 +2,11 @@
 {% block content %}
 <div class="container mt-4">
   <h2>📡 QR Scanner</h2>
-  <div id="reader" style="width: 400px; margin-bottom: 20px;"></div>
+
+  <!-- Inline message -->
+  <div id="scanMessage" class="mb-3"></div>
+
+  <video id="preview" width="400" style="border:1px solid #ccc;"></video>
 
   <hr>
 
@@ -24,91 +28,76 @@
   </table>
 </div>
 
-<!-- Include html5-qrcode library -->
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
 <script>
-let scannedUsers = {};
+  let scannedUsers = {};
 
-// Automatically detect meal type based on current hour
-function getMealType(){
-    const hour = new Date().getHours();
-    if(hour >= 7 && hour < 10) return "breakfast";
-    if(hour >= 12 && hour < 15) return "lunch";
-    if(hour >= 19 && hour < 21) return "dinner";
-    return "lunch"; // default
-}
+  const msgDiv = document.getElementById("scanMessage");
 
-// Render scanned users table
-function renderTable(){
-    const tbody = document.querySelector('#scannedUsersTable tbody');
-    tbody.innerHTML = '';
-    let i = 1;
-    for(let key in scannedUsers){
-        const u = scannedUsers[key];
-        tbody.innerHTML += `<tr>
-            <td>${i++}</td>
-            <td>${u.name}</td>
-            <td>${u.email}</td>
-            <td>${u.course}</td>
-            <td>${u.total_scans}</td>
-        </tr>`;
-    }
-}
+  // QR scanner
+  let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
+  scanner.addListener('scan', function(content) {
+      fetch('/admin/scan_qr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ qr_data: content })
+      })
+      .then(res => res.json())
+      .then(data => {
+          if(data.success){
+              // Show inline success message
+              msgDiv.innerHTML = `<span class="text-success">✅ ${data.name} scanned successfully. Total: ${data.count}</span>`;
 
-// Initialize QR scanner
-const html5QrcodeScanner = new Html5QrcodeScanner(
-    "reader", { fps: 10, qrbox: 250 }
-);
+              // Update scannedUsers object
+              scannedUsers[data.name] = { 
+                  name: data.name, 
+                  email: '', // optional, fetch from server if needed
+                  course: '', // optional
+                  total_scans: data.count 
+              };
 
-function onScanSuccess(decodedText, decodedResult){
-    console.log("QR Scanned:", decodedText);
+              renderTable();
+          } else {
+              // Show inline error message
+              msgDiv.innerHTML = `<span class="text-danger">❌ ${data.message}</span>`;
+          }
 
-    let user_id = null;
-    try {
-        const parts = decodedText.split(",");
-        for(let p of parts){
-            if(p.startsWith("user_id:")){
-                user_id = p.split(":")[1];
-                break;
-            }
-        }
-    } catch(e){
-        console.error("QR parse error:", e);
-    }
+          // Clear message after 3 seconds
+          setTimeout(() => { msgDiv.innerHTML = ''; }, 3000);
+      })
+      .catch(err => {
+          msgDiv.innerHTML = `<span class="text-danger">❌ Error scanning QR code.</span>`;
+          setTimeout(() => { msgDiv.innerHTML = ''; }, 3000);
+          console.error(err);
+      });
+  });
 
-    if(!user_id){
-        alert("❌ Invalid QR code");
-        return;
-    }
+  // Start camera
+  Instascan.Camera.getCameras().then(function (cameras) {
+      if (cameras.length > 0) {
+          scanner.start(cameras[0]);
+      } else {
+          msgDiv.innerHTML = `<span class="text-warning">⚠️ No cameras found.</span>`;
+      }
+  }).catch(function (e) {
+      msgDiv.innerHTML = `<span class="text-danger">❌ ${e}</span>`;
+      console.error(e);
+  });
 
-    fetch('/admin/scan_qr', {
-        method: 'POST',
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: user_id, meal_type: getMealType() })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.success){
-            alert(`✅ ${data.name} scanned successfully. Total: ${data.count}`);
-
-            scannedUsers[data.name] = {
-                name: data.name,
-                email: data.email || '',
-                course: data.course || '',
-                total_scans: data.count
-            };
-            renderTable();
-        } else {
-            alert(`❌ ${data.message}`);
-        }
-    })
-    .catch(err => {
-        console.error(err);
-        alert("❌ Network or server error");
-    });
-}
-
-// Start scanner
-html5QrcodeScanner.render(onScanSuccess);
+  function renderTable(){
+      const tbody = document.querySelector('#scannedUsersTable tbody');
+      tbody.innerHTML = '';
+      let i = 1;
+      for(let key in scannedUsers){
+          let u = scannedUsers[key];
+          tbody.innerHTML += `<tr>
+              <td>${i++}</td>
+              <td>${u.name}</td>
+              <td>${u.email}</td>
+              <td>${u.course}</td>
+              <td>${u.total_scans}</td>
+          </tr>`;
+      }
+  }
 </script>
 {% endblock %}
