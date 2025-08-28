@@ -731,7 +731,10 @@ def my_qr():
 
 
 # -------- ADMIN: SCAN QR AND INCREMENT MESS COUNT --------
-from datetime import datetime, date, time
+from flask import request, jsonify
+from flask_login import login_required, current_user
+from datetime import date
+import MySQLdb.cursors
 
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
@@ -739,62 +742,61 @@ def scan_qr():
     if not current_user.is_admin:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
+    # Get JSON data
     data = request.get_json(silent=True) or request.form
-    qr_data = data.get('qr_data')
+    user_id = data.get('user_id')
     meal_type = data.get('meal_type')
+    
+    today = date.today()
 
-    # Define allowed meal slots
-    meal_slots = {
-        'breakfast': (time(7,30), time(9,0)),
-        'lunch': (time(12,0), time(14,0)),
-        'dinner': (time(19,30), time(23,0))
-    }
-
-    # Validate input
-    if not qr_data or meal_type not in meal_slots:
+    if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
         return jsonify({'success': False, 'message': 'Invalid data'}), 400
-
-    # Check current time against meal slot
-    now = datetime.now().time()
-    slot_start, slot_end = meal_slots[meal_type]
-    if not (slot_start <= now <= slot_end):
-        return jsonify({'success': False, 'message': f"Cannot scan {meal_type} outside {slot_start.strftime('%H:%M')} - {slot_end.strftime('%H:%M')}"}), 403
-
-    # Extract user_id from QR code (expected format: user_id:{id},email:xxx,...)
-    try:
-        user_id = int(qr_data.split("user_id:")[1].split(",")[0])
-    except Exception as e:
-        return jsonify({'success': False, 'message': 'Invalid QR format'}), 400
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Insert attendance, ignore duplicates
-        today = date.today()
+        # Insert attendance (ignore duplicates)
         cur.execute("""
             INSERT IGNORE INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
         """, (user_id, meal_type, today))
         mysql.connection.commit()
 
-        # Get total users for this meal today
-        cur.execute("""
-            SELECT COUNT(*) AS count FROM meal_attendance
-            WHERE meal_type=%s AND attendance_date=%s
-        """, (meal_type, today))
-        result = cur.fetchone()
-
-        # Get user details
+        # Get user info
         cur.execute("SELECT name, email, course FROM users WHERE id=%s", (user_id,))
         user = cur.fetchone()
+
+        # Get user's meal counts today
+        cur.execute("""
+            SELECT meal_type, COUNT(*) AS count
+            FROM meal_attendance
+            WHERE user_id=%s AND attendance_date=%s
+            GROUP BY meal_type
+        """, (user_id, today))
+        user_counts = {row['meal_type']: row['count'] for row in cur.fetchall()}
+
+        # Get total meal counts today
+        cur.execute("""
+            SELECT meal_type, COUNT(*) AS count
+            FROM meal_attendance
+            WHERE attendance_date=%s
+            GROUP BY meal_type
+        """, (today,))
+        total_counts = {row['meal_type']: row['count'] for row in cur.fetchall()}
+
         cur.close()
 
         return jsonify({
             'success': True,
             'name': user['name'],
-            'email': user['email'],
-            'course': user['course'],
-            'count': result['count']
+            'email': user.get('email', ''),
+            'course': user.get('course', ''),
+            'breakfast': user_counts.get('breakfast', 0),
+            'lunch': user_counts.get('lunch', 0),
+            'dinner': user_counts.get('dinner', 0),
+            'total_breakfast': total_counts.get('breakfast', 0),
+            'total_lunch': total_counts.get('lunch', 0),
+            'total_dinner': total_counts.get('dinner', 0)
         })
 
     except MySQLdb.Error as e:
