@@ -368,7 +368,7 @@ def users_list():
     cursor.execute("SELECT * FROM users")
     users = cursor.fetchall()
 
-    cur.close()
+    cursor.close()
     return render_template('admin_users.html', users=users)
 
 
