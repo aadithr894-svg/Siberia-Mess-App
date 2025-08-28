@@ -3,104 +3,94 @@
 <div class="container mt-4">
   <h2>📡 QR Scanner</h2>
 
-  <div class="mb-3"><strong>Today's Date:</strong> {{ current_date }}</div>
+  <!-- Date display -->
+  <div class="mb-3">
+    <strong>Today's Date:</strong> {{ current_date }}
+  </div>
 
   <!-- Meal selector -->
   <div class="mb-3">
     <label for="mealType" class="form-label">Select Meal</label>
     <select id="mealType" class="form-select">
-      <option value="breakfast">Breakfast (7:30 - 9:00)</option>
+      <option value="breakfast">Breakfast (07:30 - 09:00)</option>
       <option value="lunch">Lunch (12:00 - 14:00)</option>
       <option value="dinner">Dinner (19:30 - 23:59)</option>
     </select>
   </div>
 
   <!-- QR Scanner -->
-  <div id="reader" style="width: 400px; height: 300px;"></div>
+  <div id="reader" style="width: 400px; height: 300px; border:1px solid #ccc;"></div>
 
   <hr>
 
-  <!-- Scanned Users -->
-  <h4>Scanned Users</h4>
-  <div id="mealTables">
-    {% for meal in ['breakfast', 'lunch', 'dinner'] %}
-    <h5>{{ meal.capitalize() }}</h5>
-    <table class="table table-bordered table-striped" id="{{ meal }}Table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Course</th>
-          <th>Total Scans</th>
-          <th>Date</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-    {% endfor %}
-  </div>
+  <!-- Last scanned user -->
+  <h4>Last Scanned User</h4>
+  <table class="table table-bordered table-striped" id="lastScannedUser">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Course</th>
+        <th>Meal</th>
+        <th>Total Scans</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td colspan="5" style="text-align:center;">No scans yet</td>
+      </tr>
+    </tbody>
+  </table>
 </div>
 
+<!-- Html5 Qrcode -->
 <script src="https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js"></script>
 <script>
-const scannedUsers = { breakfast: {}, lunch: {}, dinner: {} };
-const mealSelect = document.getElementById("mealType");
+const lastUserTbody = document.querySelector("#lastScannedUser tbody");
 
-function renderTable(meal){
-  const tbody = document.querySelector(`#${meal}Table tbody`);
-  tbody.innerHTML = '';
-  let i = 1;
-  const today = new Date().toISOString().split('T')[0];
-  for(let key in scannedUsers[meal]){
-    const u = scannedUsers[meal][key];
-    tbody.innerHTML += `<tr>
-      <td>${i++}</td>
-      <td>${u.name}</td>
-      <td>${u.email}</td>
-      <td>${u.course}</td>
-      <td>${u.total_scans}</td>
-      <td>${today}</td>
-    </tr>`;
-  }
-}
-
-function scanSuccess(qrMessage){
-  const selectedMeal = mealSelect.value;
-  fetch('/admin/scan_qr', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ qr_data: qrMessage, meal_type: selectedMeal })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if(data.success){
-      scannedUsers[selectedMeal][data.name] = {
-        name: data.name,
-        email: data.email || '',
-        course: data.course || '',
-        total_scans: data.count
-      };
-      renderTable(selectedMeal);
-    } else {
-      console.error(data.message);
-    }
-  })
-  .catch(err => console.error(err));
+function updateLastScanned(data) {
+    lastUserTbody.innerHTML = `
+      <tr>
+        <td>${data.name}</td>
+        <td>${data.email || '-'}</td>
+        <td>${data.course || '-'}</td>
+        <td>${document.getElementById('mealType').value}</td>
+        <td>${data.count}</td>
+      </tr>
+    `;
 }
 
 // Initialize scanner
-let html5QrcodeScanner = new Html5Qrcode("reader");
+const html5QrcodeScanner = new Html5Qrcode("reader");
+
+function scanSuccess(qrMessage) {
+    fetch('/admin/scan_qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qr_data: qrMessage, meal_type: document.getElementById('mealType').value })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.success){
+            updateLastScanned(data);
+        } else {
+            console.error(data.message);
+        }
+    })
+    .catch(err => console.error("Scan error:", err));
+}
+
+// Start camera
 Html5Qrcode.getCameras().then(cameras => {
-  if(cameras && cameras.length){
-    html5QrcodeScanner.start(
-      cameras[0].id,
-      { fps: 10, qrbox: 250 },
-      scanSuccess
-    ).catch(err => console.error("QR scanner start failed:", err));
-  } else {
-    console.error("No cameras found.");
-  }
-}).catch(err => console.error(err));
+    if(cameras && cameras.length){
+        html5QrcodeScanner.start(
+            cameras[0].id,
+            { fps: 10, qrbox: 250 },
+            scanSuccess
+        ).catch(err => console.error("QR scanner start failed:", err));
+    } else {
+        console.error("No cameras found.");
+    }
+}).catch(err => console.error("Camera error:", err));
 </script>
 {% endblock %}
