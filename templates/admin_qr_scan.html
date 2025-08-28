@@ -1,96 +1,66 @@
-{% extends "admin_base.html" %}
-{% block content %}
-<div class="container mt-4">
-  <h2>📡 QR Scanner</h2>
-
-  <!-- Date display -->
-  <div class="mb-3">
-    <strong>Today's Date:</strong> {{ current_date }}
-  </div>
-
-  <!-- Meal selector -->
-  <div class="mb-3">
-    <label for="mealType" class="form-label">Select Meal</label>
-    <select id="mealType" class="form-select">
-      <option value="breakfast">Breakfast (07:30 - 09:00)</option>
-      <option value="lunch">Lunch (12:00 - 14:00)</option>
-      <option value="dinner">Dinner (19:30 - 23:59)</option>
-    </select>
-  </div>
-
-  <!-- QR Scanner -->
-  <div id="reader" style="width: 400px; height: 300px; border:1px solid #ccc;"></div>
-
-  <hr>
-
-  <!-- Last scanned user -->
-  <h4>Last Scanned User</h4>
-  <table class="table table-bordered table-striped" id="lastScannedUser">
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Email</th>
-        <th>Course</th>
-        <th>Meal</th>
-        <th>Total Scans</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td colspan="5" style="text-align:center;">No scans yet</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-<!-- Html5 Qrcode -->
-<script src="https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
 <script>
-const lastUserTbody = document.querySelector("#lastScannedUser tbody");
+const scannedUsers = {
+    breakfast: {},
+    lunch: {},
+    dinner: {}
+};
 
-function updateLastScanned(data) {
-    lastUserTbody.innerHTML = `
-      <tr>
-        <td>${data.name}</td>
-        <td>${data.email || '-'}</td>
-        <td>${data.course || '-'}</td>
-        <td>${document.getElementById('mealType').value}</td>
-        <td>${data.count}</td>
-      </tr>
-    `;
+// Automatic meal detection
+function detectMeal() {
+    const now = new Date();
+    const hours = now.getHours() + now.getMinutes() / 60;
+    if (hours >= 7.5 && hours <= 9) return 'breakfast';
+    if (hours >= 12 && hours <= 14) return 'lunch';
+    return 'dinner'; // dinner until 23:59
+}
+
+// Render last scanned user table
+function renderTable(meal) {
+    const tbody = document.querySelector(`#${meal}Table tbody`);
+    tbody.innerHTML = '';
+    let i = 1;
+    const today = new Date().toISOString().split('T')[0];
+    for (let key in scannedUsers[meal]) {
+        const u = scannedUsers[meal][key];
+        tbody.innerHTML += `<tr>
+            <td>${i++}</td>
+            <td>${u.name}</td>
+            <td>${u.email}</td>
+            <td>${u.course}</td>
+            <td>${u.total_scans}</td>
+            <td>${today}</td>
+        </tr>`;
+    }
 }
 
 // Initialize scanner
-const html5QrcodeScanner = new Html5Qrcode("reader");
+let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
+scanner.addListener('scan', function(content) {
+    const meal = detectMeal();
 
-function scanSuccess(qrMessage) {
     fetch('/admin/scan_qr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qr_data: qrMessage, meal_type: document.getElementById('mealType').value })
+        body: JSON.stringify({ qr_data: content, meal_type: meal })
     })
     .then(res => res.json())
     .then(data => {
-        if(data.success){
-            updateLastScanned(data);
-        } else {
-            console.error(data.message);
+        if (data.success) {
+            scannedUsers[meal][data.name] = {
+                name: data.name,
+                email: data.email || '',
+                course: data.course || '',
+                total_scans: data.count
+            };
+            renderTable(meal);
         }
     })
-    .catch(err => console.error("Scan error:", err));
-}
+    .catch(err => console.error(err));
+});
 
-// Start camera
-Html5Qrcode.getCameras().then(cameras => {
-    if(cameras && cameras.length){
-        html5QrcodeScanner.start(
-            cameras[0].id,
-            { fps: 10, qrbox: 250 },
-            scanSuccess
-        ).catch(err => console.error("QR scanner start failed:", err));
-    } else {
-        console.error("No cameras found.");
-    }
-}).catch(err => console.error("Camera error:", err));
+// Start camera silently
+Instascan.Camera.getCameras().then(cameras => {
+    if (cameras.length > 0) scanner.start(cameras[0]);
+}).catch(err => console.error(err));
 </script>
-{% endblock %}
