@@ -393,14 +393,17 @@ def delete_user(user_id):
 
 
 # -------- ADMIN: LIVE QR SCANNER --------
+from flask import render_template, request, jsonify
+from flask_login import login_required, current_user
+import MySQLdb.cursors
+from datetime import date
+
 @app.route('/admin/qr_scan')
 @login_required
 def admin_qr_scan():
-    if not current_user.is_admin:
-        flash("Unauthorized", "danger")
-        return redirect(url_for('user_dashboard'))
-    return render_template('admin_qr_scan.html')
-
+    if not getattr(current_user, 'is_admin', False):
+        return "Unauthorized", 403
+    return render_template("admin_qr_scan.html", current_date=date.today().strftime("%Y-%m-%d"))
 
 
 
@@ -740,8 +743,6 @@ def scan_qr():
     data = request.get_json(silent=True) or request.form
     qr_data = data.get('qr_data')
     meal_type = data.get('meal_type')
-
-    from datetime import date
     today = date.today()
 
     if not qr_data or meal_type not in ['breakfast', 'lunch', 'dinner']:
@@ -749,17 +750,20 @@ def scan_qr():
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        # Get user info
         cur.execute("SELECT id, name, email, course FROM users WHERE id=%s", (qr_data,))
         user = cur.fetchone()
         if not user:
-            return jsonify({'success': False, 'message': f'User not found'}), 404
+            return jsonify({'success': False, 'message': 'User not found'}), 404
 
+        # Insert attendance (ignore duplicates)
         cur.execute("""
             INSERT IGNORE INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
         """, (qr_data, meal_type, today))
         mysql.connection.commit()
 
+        # Get total scans for this meal today
         cur.execute("""
             SELECT COUNT(*) AS count FROM meal_attendance
             WHERE meal_type=%s AND attendance_date=%s
@@ -774,29 +778,8 @@ def scan_qr():
             'course': user['course'],
             'count': result['count']
         })
-
     except MySQLdb.Error as e:
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
-@app.route('/admin/meal_counts')
-@login_required
-def meal_counts():
-    if not getattr(current_user, 'is_admin', False):
-        return jsonify({'error': 'Unauthorized'}), 403
-
-    today = date.today()
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    counts = {}
-
-    for meal in ['breakfast', 'lunch', 'dinner']:
-        cur.execute("""
-            SELECT COUNT(*) AS total_users
-            FROM meal_attendance
-            WHERE meal_type=%s AND attendance_date=%s
-        """, (meal, today))
-        counts[meal] = cur.fetchone()['total_users']
-
-    cur.close()
-    return jsonify(counts)
 
 
 
