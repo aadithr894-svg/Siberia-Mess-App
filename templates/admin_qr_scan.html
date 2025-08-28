@@ -1,24 +1,20 @@
 {% extends "admin_base.html" %}
 {% block content %}
 <div class="container mt-4">
-  <h2>📡 QR Scanner</h2>
-  <p><strong>Date:</strong> {{ current_date }}</p>
+  <h2>📡 QR Scanner - {{ current_date }}</h2>
 
-  <!-- Meal Slot Selection -->
   <div class="mb-3">
-    <label for="mealSelect"><strong>Select Meal Slot:</strong></label>
-    <select id="mealSelect" class="form-select" style="width: 200px;">
-      <option value="breakfast">Breakfast (07:30 - 09:00)</option>
-      <option value="lunch">Lunch (12:00 - 14:00)</option>
-      <option value="dinner">Dinner (19:30 - 23:00)</option>
+    <label for="mealType">Select Meal:</label>
+    <select id="mealType" class="form-control" style="width:250px;">
+      <option value="breakfast">Breakfast (7:30-9:00)</option>
+      <option value="lunch">Lunch (12:00-14:00)</option>
+      <option value="dinner">Dinner (19:30-23:00)</option>
     </select>
   </div>
 
-  <video id="preview" width="400"></video>
+  <div id="qr-reader" style="width:400px;"></div>
 
   <hr>
-
-  <!-- Scanned Users Today -->
   <h4>Scanned Users Today</h4>
   <table class="table table-bordered table-striped" id="scannedUsersTable">
     <thead>
@@ -27,100 +23,72 @@
         <th>Name</th>
         <th>Email</th>
         <th>Course</th>
-        <th>Breakfast</th>
-        <th>Lunch</th>
-        <th>Dinner</th>
+        <th>Total Scans</th>
       </tr>
     </thead>
-    <tbody>
-      <!-- Rows will be populated by JS -->
-    </tbody>
+    <tbody></tbody>
   </table>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
+<!-- Html5 QR Code Library -->
+<script src="https://unpkg.com/html5-qrcode"></script>
 <script>
-  let scannedUsers = {};
+let scannedUsers = {};
 
-  const mealTimes = {
-      breakfast: { start: "07:30", end: "09:00" },
-      lunch: { start: "12:00", end: "14:00" },
-      dinner: { start: "19:30", end: "23:00" }
-  };
+// Initialize QR scanner
+function onScanSuccess(decodedText, decodedResult) {
+    const meal_type = document.getElementById('mealType').value;
 
-  function timeToMinutes(timeStr){
-      const [h, m] = timeStr.split(":").map(Number);
-      return h*60 + m;
-  }
+    fetch('/admin/scan_qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qr_data: decodedText, meal_type })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.success){
+            scannedUsers[data.name] = {
+                name: data.name,
+                email: data.email || '',
+                course: data.course || '',
+                total_scans: data.count
+            };
+            renderTable();
+        } else {
+            console.error("QR scan error:", data.message);
+        }
+    })
+    .catch(err => console.error(err));
+}
 
-  function isWithinTimeRange(meal, now){
-      const nowMinutes = now.getHours()*60 + now.getMinutes();
-      return nowMinutes >= timeToMinutes(mealTimes[meal].start) && nowMinutes <= timeToMinutes(mealTimes[meal].end);
-  }
+function renderTable(){
+    const tbody = document.querySelector('#scannedUsersTable tbody');
+    tbody.innerHTML = '';
+    let i = 1;
+    for(let key in scannedUsers){
+        const u = scannedUsers[key];
+        tbody.innerHTML += `<tr>
+            <td>${i++}</td>
+            <td>${u.name}</td>
+            <td>${u.email}</td>
+            <td>${u.course}</td>
+            <td>${u.total_scans}</td>
+        </tr>`;
+    }
+}
 
-  let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
-  scanner.addListener('scan', function(content) {
-      const meal = document.getElementById('mealSelect').value;
-      const now = new Date();
-
-      if(!isWithinTimeRange(meal, now)){
-          console.log(`Scan outside ${meal} time slot.`);
-          return;
-      }
-
-      fetch('/admin/scan_qr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ qr_data: content, meal_type: meal })
-      })
-      .then(res => res.json())
-      .then(data => {
-          if(data.success){
-              const userKey = data.name;
-              if(!scannedUsers[userKey]){
-                  scannedUsers[userKey] = { 
-                      name: data.name, 
-                      email: '', 
-                      course: '', 
-                      breakfast: 0,
-                      lunch: 0,
-                      dinner: 0
-                  };
-              }
-              scannedUsers[userKey][meal] = data.count;
-              renderTable();
-          } else {
-              console.log("Scan error:", data.message);
-          }
-      });
-  });
-
-  Instascan.Camera.getCameras().then(function (cameras) {
-      if (cameras.length > 0) {
-          scanner.start(cameras[0]);
-      } else {
-          console.error('No cameras found.');
-      }
-  }).catch(function (e) {
-      console.error(e);
-  });
-
-  function renderTable(){
-      const tbody = document.querySelector('#scannedUsersTable tbody');
-      tbody.innerHTML = '';
-      let i = 1;
-      for(let key in scannedUsers){
-          const u = scannedUsers[key];
-          tbody.innerHTML += `<tr>
-              <td>${i++}</td>
-              <td>${u.name}</td>
-              <td>${u.email}</td>
-              <td>${u.course}</td>
-              <td>${u.breakfast}</td>
-              <td>${u.lunch}</td>
-              <td>${u.dinner}</td>
-          </tr>`;
-      }
-  }
+// Setup html5-qrcode scanner
+let html5QrcodeScanner = new Html5Qrcode("qr-reader");
+Html5Qrcode.getCameras().then(cameras => {
+    if (cameras && cameras.length) {
+        html5QrcodeScanner.start(
+            cameras[0].id, 
+            { fps: 10, qrbox: 250 },
+            onScanSuccess
+        );
+    } else {
+        console.error("No cameras found.");
+    }
+}).catch(err => console.error(err));
 </script>
 {% endblock %}

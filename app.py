@@ -731,27 +731,46 @@ def my_qr():
 
 
 # -------- ADMIN: SCAN QR AND INCREMENT MESS COUNT --------
+from datetime import datetime, date, time
+
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
 def scan_qr():
     if not current_user.is_admin:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    # Try to get JSON
     data = request.get_json(silent=True) or request.form
-    user_id = data.get('user_id')
+    qr_data = data.get('qr_data')
     meal_type = data.get('meal_type')
-    
-    from datetime import date
-    today = date.today()
 
-    if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
+    # Define allowed meal slots
+    meal_slots = {
+        'breakfast': (time(7,30), time(9,0)),
+        'lunch': (time(12,0), time(14,0)),
+        'dinner': (time(19,30), time(23,0))
+    }
+
+    # Validate input
+    if not qr_data or meal_type not in meal_slots:
         return jsonify({'success': False, 'message': 'Invalid data'}), 400
+
+    # Check current time against meal slot
+    now = datetime.now().time()
+    slot_start, slot_end = meal_slots[meal_type]
+    if not (slot_start <= now <= slot_end):
+        return jsonify({'success': False, 'message': f"Cannot scan {meal_type} outside {slot_start.strftime('%H:%M')} - {slot_end.strftime('%H:%M')}"}), 403
+
+    # Extract user_id from QR code (expected format: user_id:{id},email:xxx,...)
+    try:
+        user_id = int(qr_data.split("user_id:")[1].split(",")[0])
+    except Exception as e:
+        return jsonify({'success': False, 'message': 'Invalid QR format'}), 400
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Insert attendance (ignore duplicates)
+        # Insert attendance, ignore duplicates
+        today = date.today()
         cur.execute("""
             INSERT IGNORE INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
@@ -765,19 +784,21 @@ def scan_qr():
         """, (meal_type, today))
         result = cur.fetchone()
 
-        # Get user name
-        cur.execute("SELECT name FROM users WHERE id=%s", (user_id,))
+        # Get user details
+        cur.execute("SELECT name, email, course FROM users WHERE id=%s", (user_id,))
         user = cur.fetchone()
         cur.close()
 
         return jsonify({
             'success': True,
             'name': user['name'],
+            'email': user['email'],
+            'course': user['course'],
             'count': result['count']
         })
+
     except MySQLdb.Error as e:
         return jsonify({'success': False, 'message': str(e)}), 500
-
 
 
 
