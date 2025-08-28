@@ -1,44 +1,55 @@
-{% extends 'admin_base.html' %}
-
+{% extends "admin_base.html" %}
 {% block content %}
-<h2>Simulate QR Scan</h2>
+<div class="container mt-4">
+  <h2>📊 QR Scan Counts ({{ today }})</h2>
+  <hr>
 
-<!-- Manual QR simulation -->
-<div style="margin-bottom: 20px;">
-    <label>User ID: </label>
-    <input type="number" id="user_id_input" min="1" value="1">
-    
-    <label>Meal Type: </label>
-    <select id="meal_type_input">
-        <option value="breakfast">Breakfast</option>
-        <option value="lunch">Lunch</option>
-        <option value="dinner">Dinner</option>
-    </select>
-    
-    <button id="simulate_scan" class="btn btn-primary">Simulate Scan</button>
+  <!-- Today’s Meal Counts -->
+  <h4>Today’s Meal Totals</h4>
+  <canvas id="mealChart"></canvas>
+
+  <hr>
+
+  <!-- Per-user Scan Totals -->
+  <h4>Per User Scan Totals</h4>
+  <table class="table table-bordered table-striped">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Name</th>
+        <th>Course</th>
+        <th>Total Scans</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ u.name }}</td>
+        <td>{{ u.course }}</td>
+        <td>{{ u.total_scans }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 
-<p id="scan_result" style="font-weight: bold;"></p>
-
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.getElementById('simulate_scan').addEventListener('click', function() {
-    const userId = parseInt(document.getElementById('user_id_input').value);
-    const mealType = document.getElementById('meal_type_input').value;
+  const mealData = {
+    labels: [{% for m in meal_counts %}"{{ m.meal_type|capitalize }}",{% endfor %}],
+    datasets: [{
+      label: 'Scans',
+      data: [{% for m in meal_counts %}{{ m.count }},{% endfor %}],
+      backgroundColor: ['#36A2EB', '#FFCE56', '#FF6384'],
+    }]
+  };
 
-    fetch('/admin/scan_qr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, meal_type: mealType })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if(data.success){
-            document.getElementById('scan_result').textContent = 
-                `Simulated scan: ${data.name}. ${mealType} count: ${data.count}`;
-        } else {
-            document.getElementById('scan_result').textContent = "Error: " + data.message;
-        }
-    });
-});
+  new Chart(document.getElementById('mealChart'), {
+    type: 'bar',
+    data: mealData,
+    options: { responsive: true }
+  });
 </script>
 {% endblock %}
