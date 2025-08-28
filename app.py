@@ -805,7 +805,7 @@ def scan_qr():
         })
 
     except MySQLdb.Error as e:
-        return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}),500
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
