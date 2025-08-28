@@ -1,81 +1,116 @@
 {% extends "admin_base.html" %}
 {% block content %}
 <div class="container mt-4">
-  <h2>📡 QR Scanner</h2>
-  <video id="preview" width="400"></video>
+    <h2>📡 QR Scanner</h2>
+    <p>Date: <span id="todayDate"></span></p>
 
-  <hr>
+    <video id="preview" width="400" autoplay muted></video>
 
-  <div id="lastUser" class="mt-3"></div>
+    <hr>
+
+    <!-- Last scanned user -->
+    <h4>Last Scanned User</h4>
+    <table class="table table-bordered table-striped" id="lastScannedUser">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Course</th>
+                <th>Meal</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td colspan="4" style="text-align:center;">No scans yet</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <!-- Counts for each meal -->
+    <h4>Meal Counts Today</h4>
+    <table class="table table-bordered table-striped" id="mealCounts">
+        <thead>
+            <tr>
+                <th>Meal</th>
+                <th>Total Scans</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>Breakfast</td><td id="breakfastCount">0</td></tr>
+            <tr><td>Lunch</td><td id="lunchCount">0</td></tr>
+            <tr><td>Dinner</td><td id="dinnerCount">0</td></tr>
+        </tbody>
+    </table>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
 <script>
-let lastScannedUser = null;
+    document.getElementById('todayDate').innerText = new Date().toLocaleDateString();
 
-function getMealType() {
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const time = hours*60 + minutes; // total minutes since midnight
+    let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
 
-    // Breakfast: 07:30 - 09:00 (450 - 540)
-    if(time >= 450 && time <= 540) return 'breakfast';
-    // Lunch: 12:00 - 14:00 (720 - 840)
-    if(time >= 720 && time <= 840) return 'lunch';
-    // Dinner: 19:30 - 23:00 (1170 - 1380)
-    if(time >= 1170 && time <= 1380) return 'dinner';
-
-    return null; // outside meal time
-}
-
-function renderLastUser(){
-    const container = document.getElementById('lastUser');
-    container.innerHTML = lastScannedUser ? `
-        <h4>Last Scanned User</h4>
-        <p><b>Name:</b> ${lastScannedUser.name}</p>
-        <p><b>Email:</b> ${lastScannedUser.email}</p>
-        <p><b>Course:</b> ${lastScannedUser.course}</p>
-        <p><b>Meal:</b> ${lastScannedUser.meal_type}</p>
-        <p><b>Total Today:</b> ${lastScannedUser.count}</p>
-    ` : '';
-}
-
-let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
-
-scanner.addListener('scan', function(content) {
-    const mealType = getMealType();
-    if(!mealType){
-        console.warn("Outside meal time, scan ignored.");
-        return;
-    }
-
-    fetch('/admin/scan_qr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: content, meal_type: mealType })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.success){
-            lastScannedUser = data;
-            renderLastUser();
-        } else {
-            console.error(data.message);
-        }
+    // Scan listener
+    scanner.addListener('scan', function(content) {
+        fetch('/admin/scan_qr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: content, meal_type: detectMeal() })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success){
+                updateLastScanned(data);
+                updateMealCounts(data);
+            } else {
+                console.error(data.message);
+            }
+        });
     });
-});
 
-Instascan.Camera.getCameras().then(function(cameras) {
-    if(cameras.length > 0){
-        let backCam = cameras.find(cam => cam.name.toLowerCase().includes('back') || cam.facing === 'environment');
-        if(!backCam) backCam = cameras[0]; 
-        scanner.start(backCam);
-    } else {
-        console.error('No cameras found.');
+    // Back camera preferred
+    Instascan.Camera.getCameras().then(function (cameras) {
+        if(cameras.length > 0){
+            let backCam = cameras.find(cam => cam.name.toLowerCase().includes('back')) || cameras[0];
+            scanner.start(backCam);
+        } else {
+            console.error('No cameras found.');
+        }
+    }).catch(e => console.error(e));
+
+    function detectMeal(){
+        let now = new Date();
+        let hours = now.getHours();
+        let minutes = now.getMinutes();
+        let time = hours + minutes/60;
+
+        if(time >= 7.5 && time <= 9){          // 7:30-9:00
+            return 'breakfast';
+        } else if(time >= 12 && time <= 14){    // 12:00-14:00
+            return 'lunch';
+        } else if(time >= 19.5 && time <= 23){  // 19:30-23:00
+            return 'dinner';
+        } else {
+            return 'dinner'; // default if outside hours
+        }
     }
-}).catch(function(e){
-    console.error(e);
-});
+
+    function updateLastScanned(data){
+        const tbody = document.querySelector('#lastScannedUser tbody');
+        tbody.innerHTML = `
+            <tr>
+                <td>${data.name}</td>
+                <td>${data.email || '-'}</td>
+                <td>${data.course || '-'}</td>
+                <td>${detectMeal()}</td>
+            </tr>
+        `;
+    }
+
+    function updateMealCounts(data){
+        const meal = detectMeal();
+        document.getElementById(meal + 'Count').innerText = data.count;
+    }
 </script>
 {% endblock %}
