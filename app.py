@@ -392,16 +392,6 @@ def delete_user(user_id):
 
 
 
-# -------- ADMIN: LIVE QR SCANNER --------
-@app.route('/admin/qr_scan')
-@login_required
-def admin_qr_scan():
-    if not current_user.is_admin:
-        flash("Unauthorized", "danger")
-        return redirect(url_for('user_dashboard'))
-    return render_template('admin_qr_scan.html')
-
-
 
 
 
@@ -731,57 +721,92 @@ def my_qr():
 
 
 # -------- ADMIN: SCAN QR AND INCREMENT MESS COUNT --------
+from flask import Flask, render_template, request, jsonify
+from flask_login import login_required, current_user
+import MySQLdb.cursors
+from datetime import date, datetime
+
+@app.route('/admin/qr_scan')
+@login_required
+def admin_qr_scan():
+    if not getattr(current_user, 'is_admin', False):
+        return "Unauthorized", 403
+    return render_template('admin_qr_scan.html', current_date=date.today().strftime("%Y-%m-%d"))
+
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
 def scan_qr():
     if not getattr(current_user, 'is_admin', False):
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    # Get JSON data
     data = request.get_json(silent=True)
     qr_data = data.get('qr_data')
-    meal_type = data.get('meal_type')
-    today = date.today()
 
-    if not qr_data or meal_type not in ['breakfast', 'lunch', 'dinner']:
-        return jsonify({'success': False, 'message': 'Invalid QR data or meal type'}), 400
+    if not qr_data:
+        return jsonify({'success': False, 'message': 'No QR data provided'}), 400
+
+    # Auto-detect meal
+    now = datetime.now()
+    hours = now.hour + now.minute / 60
+    if 7.5 <= hours <= 9:
+        meal_type = 'breakfast'
+    elif 12 <= hours <= 14:
+        meal_type = 'lunch'
+    else:
+        meal_type = 'dinner'
+
+    today = date.today()
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Get user info from QR code
-        cur.execute("SELECT id, name, email, course FROM users WHERE id=%s", (qr_data,))
-        user = cur.fetchone()
-        if not user:
-            return jsonify({'success': False, 'message': 'User not found'}), 404
-
-        # Insert attendance for this meal, ignore duplicates
+        # Insert attendance (ignore duplicates)
         cur.execute("""
             INSERT IGNORE INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
-        """, (user['id'], meal_type, today))
+        """, (qr_data, meal_type, today))
         mysql.connection.commit()
 
-        # Get total scans for this meal today
+        # Count for this meal
         cur.execute("""
             SELECT COUNT(*) AS count FROM meal_attendance
             WHERE meal_type=%s AND attendance_date=%s
         """, (meal_type, today))
-        result = cur.fetchone()
+        meal_count = cur.fetchone()['count']
+
+        # Get totals for all meals today
+        cur.execute("""
+            SELECT meal_type, COUNT(*) as count
+            FROM meal_attendance
+            WHERE attendance_date=%s
+            GROUP BY meal_type
+        """, (today,))
+        totals = {row['meal_type']: row['count'] for row in cur.fetchall()}
+
+        # Get user info
+        cur.execute("SELECT name, email, course FROM users WHERE id=%s", (qr_data,))
+        user = cur.fetchone()
         cur.close()
+
+        if not user:
+            return jsonify({'success': False, 'message': f'User {qr_data} not found'}), 404
 
         return jsonify({
             'success': True,
             'name': user['name'],
-            'email': user['email'],
-            'course': user['course'],
-            'count': result['count']
+            'email': user['email'] or '',
+            'course': user['course'] or '',
+            'count': meal_count,
+            'totals': {
+                'breakfast': totals.get('breakfast', 0),
+                'lunch': totals.get('lunch', 0),
+                'dinner': totals.get('dinner', 0)
+            }
         })
+
     except MySQLdb.Error as e:
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
-
-
-
+}), 500
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------

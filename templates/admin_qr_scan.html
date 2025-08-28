@@ -13,11 +13,30 @@
         <th>Email</th>
         <th>Course</th>
         <th>Meal</th>
-        <th>Total Scans</th>
+        <th>Total Scans (this meal)</th>
       </tr>
     </thead>
     <tbody>
       <tr><td colspan="5" style="text-align:center;">No scans yet</td></tr>
+    </tbody>
+  </table>
+
+  <!-- Live Meal Totals -->
+  <h4>📊 Live Meal Totals</h4>
+  <table class="table table-bordered table-striped" id="mealTotals">
+    <thead>
+      <tr>
+        <th>Breakfast</th>
+        <th>Lunch</th>
+        <th>Dinner</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td id="breakfastTotal">0</td>
+        <td id="lunchTotal">0</td>
+        <td id="dinnerTotal">0</td>
+      </tr>
     </tbody>
   </table>
 
@@ -29,13 +48,13 @@
 <script>
   const lastUserTbody = document.querySelector('#lastScannedUser tbody');
 
-  // Auto-detect meal based on time
+  // Auto-detect meal
   function detectMeal() {
     const now = new Date();
     const hours = now.getHours() + now.getMinutes()/60;
     if(hours >= 7.5 && hours <= 9) return 'breakfast';
     if(hours >= 12 && hours <= 14) return 'lunch';
-    return 'dinner'; // dinner until 23:59
+    return 'dinner';
   }
 
   function updateLastScanned(data) {
@@ -50,20 +69,31 @@
     `;
   }
 
+  function updateMealTotals(totals) {
+    document.getElementById("breakfastTotal").textContent = totals.breakfast;
+    document.getElementById("lunchTotal").textContent = totals.lunch;
+    document.getElementById("dinnerTotal").textContent = totals.dinner;
+  }
+
   function scanSuccess(qrMessage) {
     fetch('/admin/scan_qr', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ qr_data: qrMessage, meal_type: detectMeal() })
+      body: JSON.stringify({ qr_data: qrMessage })
     })
     .then(res => res.json())
     .then(data => {
-      if(data.success) updateLastScanned(data);
+      if(data.success) {
+        updateLastScanned(data);
+        updateMealTotals(data.totals);
+      } else {
+        console.error(data.message);
+      }
     })
     .catch(err => console.error(err));
   }
 
-  // Initialize HTML5 QR Code scanner
+  // QR scanner init
   const html5QrcodeScanner = new Html5Qrcode("reader");
   Html5Qrcode.getCameras().then(cameras => {
     if(cameras && cameras.length) {
