@@ -99,10 +99,8 @@ with app.app_context():
 
 @app.route('/')
 def index():
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT 'Hello from Railway MySQL!'")
-    result = cur.fetchone()
-    return f"<h1>{result[0]}</h1>"
+    return render_template("index.html")
+
 
 # -------- REGISTER --------
 # -------- REGISTER --------
