@@ -5,7 +5,7 @@
     <p>Date: <span id="todayDate"></span></p>
 
     <!-- QR Scanner -->
-    <div id="reader" style="width: 400px;"></div>
+    <div id="reader" style="width: 400px; height: 300px;"></div>
 
     <hr>
 
@@ -56,14 +56,14 @@ function detectMeal(){
     let minutes = now.getMinutes();
     let time = hours + minutes/60;
 
-    if(time >= 7.5 && time <= 9){          // 7:30-9:00
+    if(time >= 7.5 && time <= 9){
         return 'breakfast';
-    } else if(time >= 12 && time <= 14){    // 12:00-14:00
+    } else if(time >= 12 && time <= 14){
         return 'lunch';
-    } else if(time >= 19.5 && time <= 23){  // 19:30-23:00
+    } else if(time >= 19.5 && time <= 23){
         return 'dinner';
     } else {
-        return 'dinner'; // default
+        return 'dinner';
     }
 }
 
@@ -84,7 +84,6 @@ function updateMealCounts(data){
     document.getElementById(meal + 'Count').innerText = data.count;
 }
 
-// Initialize HTML5 QR Code Scanner
 function scanSuccess(qrMessage){
     fetch('/admin/scan_qr', {
         method: 'POST',
@@ -103,19 +102,21 @@ function scanSuccess(qrMessage){
     .catch(err => console.error(err));
 }
 
-let html5QrcodeScanner = new Html5Qrcode("reader");
+// Initialize scanner
+const html5QrcodeScanner = new Html5Qrcode("reader");
 Html5Qrcode.getCameras().then(cameras => {
     if(cameras && cameras.length){
-        // Prefer back camera
-        let backCam = cameras.find(cam => cam.label.toLowerCase().includes('back')) || cameras[0];
         html5QrcodeScanner.start(
-            backCam.id,
-            { fps: 10, qrbox: 250 },
-            scanSuccess
+            cameras[0].id,
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            scanSuccess,
+            errorMessage => {
+                // optional: handle scan errors
+            }
         ).catch(err => console.error("QR scanner start failed:", err));
     } else {
         console.error("No cameras found.");
     }
-}).catch(err => console.error(err));
+}).catch(err => console.error("Camera error:", err));
 </script>
 {% endblock %}
