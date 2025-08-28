@@ -843,7 +843,7 @@ def qr_scan_counts():
     users = cur.fetchall()
     cur.close()
 
-    return render_template('admin_qr_counts.html', meal_counts=meal_counts, users=users, today=today)
+    return render_template('admin_qr_count.html', meal_counts=meal_counts, users=users, today=today)
 
 
     return render_template(
