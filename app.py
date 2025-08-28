@@ -393,17 +393,14 @@ def delete_user(user_id):
 
 
 # -------- ADMIN: LIVE QR SCANNER --------
-from flask import render_template, request, jsonify
-from flask_login import login_required, current_user
-import MySQLdb.cursors
-from datetime import date
-
 @app.route('/admin/qr_scan')
 @login_required
 def admin_qr_scan():
-    if not getattr(current_user, 'is_admin', False):
-        return "Unauthorized", 403
-    return render_template("admin_qr_scan.html", current_date=date.today().strftime("%Y-%m-%d"))
+    if not current_user.is_admin:
+        flash("Unauthorized", "danger")
+        return redirect(url_for('user_dashboard'))
+    return render_template('admin_qr_scan.html')
+
 
 
 
