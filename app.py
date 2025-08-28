@@ -731,26 +731,29 @@ def my_qr():
 
 
 # -------- ADMIN: SCAN QR AND INCREMENT MESS COUNT --------
-from flask import request, jsonify
-from flask_login import login_required, current_user
-from datetime import date
-import MySQLdb.cursors
-
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
 def scan_qr():
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    if not getattr(current_user, 'is_admin', False):
+        # Include current user info in error for easier debugging
+        return jsonify({
+            'success': False,
+            'message': 'Unauthorized: current user is not admin',
+            'current_user_id': getattr(current_user, 'id', None),
+            'current_user_name': getattr(current_user, 'name', None),
+            'is_admin': getattr(current_user, 'is_admin', None)
+        }), 403
 
-    # Get JSON data
+    # Try to get JSON
     data = request.get_json(silent=True) or request.form
     user_id = data.get('user_id')
     meal_type = data.get('meal_type')
     
+    from datetime import date
     today = date.today()
 
     if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
-        return jsonify({'success': False, 'message': 'Invalid data'}), 400
+        return jsonify({'success': False, 'message': 'Invalid data: user_id or meal_type missing/invalid'}), 400
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -762,46 +765,28 @@ def scan_qr():
         """, (user_id, meal_type, today))
         mysql.connection.commit()
 
-        # Get user info
-        cur.execute("SELECT name, email, course FROM users WHERE id=%s", (user_id,))
+        # Get total users for this meal today
+        cur.execute("""
+            SELECT COUNT(*) AS count FROM meal_attendance
+            WHERE meal_type=%s AND attendance_date=%s
+        """, (meal_type, today))
+        result = cur.fetchone()
+
+        # Get user name
+        cur.execute("SELECT name FROM users WHERE id=%s", (user_id,))
         user = cur.fetchone()
-
-        # Get user's meal counts today
-        cur.execute("""
-            SELECT meal_type, COUNT(*) AS count
-            FROM meal_attendance
-            WHERE user_id=%s AND attendance_date=%s
-            GROUP BY meal_type
-        """, (user_id, today))
-        user_counts = {row['meal_type']: row['count'] for row in cur.fetchall()}
-
-        # Get total meal counts today
-        cur.execute("""
-            SELECT meal_type, COUNT(*) AS count
-            FROM meal_attendance
-            WHERE attendance_date=%s
-            GROUP BY meal_type
-        """, (today,))
-        total_counts = {row['meal_type']: row['count'] for row in cur.fetchall()}
-
         cur.close()
+
+        if not user:
+            return jsonify({'success': False, 'message': f'User with id {user_id} not found'}), 404
 
         return jsonify({
             'success': True,
             'name': user['name'],
-            'email': user.get('email', ''),
-            'course': user.get('course', ''),
-            'breakfast': user_counts.get('breakfast', 0),
-            'lunch': user_counts.get('lunch', 0),
-            'dinner': user_counts.get('dinner', 0),
-            'total_breakfast': total_counts.get('breakfast', 0),
-            'total_lunch': total_counts.get('lunch', 0),
-            'total_dinner': total_counts.get('dinner', 0)
+            'count': result['count']
         })
-
     except MySQLdb.Error as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
 
 
 @app.route('/admin/meal_counts')
