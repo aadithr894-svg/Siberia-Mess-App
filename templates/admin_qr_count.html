@@ -38,10 +38,14 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   const mealData = {
-    labels: [{% for m in meal_counts %}"{{ m.meal_type|capitalize }}",{% endfor %}],
+    labels: ["Breakfast", "Lunch", "Dinner"],
     datasets: [{
       label: 'Scans',
-      data: [{% for m in meal_counts %}{{ m.count }},{% endfor %}],
+      data: [
+        {{ meal_counts.breakfast[0].total_users if meal_counts.breakfast else 0 }},
+        {{ meal_counts.lunch[0].total_users if meal_counts.lunch else 0 }},
+        {{ meal_counts.dinner[0].total_users if meal_counts.dinner else 0 }}
+      ],
       backgroundColor: ['#36A2EB', '#FFCE56', '#FF6384'],
     }]
   };
@@ -49,7 +53,13 @@
   new Chart(document.getElementById('mealChart'), {
     type: 'bar',
     data: mealData,
-    options: { responsive: true }
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, position: 'top' },
+        title: { display: true, text: "Meal Scan Counts" }
+      }
+    }
   });
 </script>
 {% endblock %}

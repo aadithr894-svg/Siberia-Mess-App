@@ -1,108 +1,85 @@
-{% extends 'base.html' %}
-
+{% extends "admin_base.html" %}
 {% block content %}
-<div class="flex flex-col items-center justify-center p-4 min-h-screen bg-gray-100">
-    <h2 class="text-2xl font-bold mb-4 text-indigo-600 text-center">Live QR Scanner</h2>
+<div class="container mt-4">
+  <h2>📡 QR Scanner</h2>
+  <video id="preview" width="400"></video>
 
-    <!-- Scanner Container -->
-    <div class="relative w-full max-w-md bg-white rounded-xl shadow-lg overflow-hidden">
-        <video id="video" class="w-full h-[300px] sm:h-[400px] md:h-[450px] rounded-t-xl object-cover" autoplay playsinline></video>
-        <div id="scan-result" class="absolute bottom-0 left-0 w-full bg-indigo-600 text-white text-center py-2 font-semibold text-lg rounded-b-xl">
-            Point your camera at a QR code
-        </div>
-    </div>
+  <hr>
 
-    <!-- Optional instructions -->
-    <p class="mt-4 text-gray-700 text-center text-sm px-4">
-        Ensure your QR code is well-lit and entirely visible in the camera frame.
-    </p>
+  <!-- Scanned Users Today -->
+  <h4>Scanned Users Today</h4>
+  <table class="table table-bordered table-striped" id="scannedUsersTable">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Course</th>
+        <th>Total Scans</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Rows will be populated by JS -->
+    </tbody>
+  </table>
 </div>
 
-<!-- JSQR library -->
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
 <script>
-const video = document.getElementById('video');
-const scanResult = document.getElementById('scan-result');
+  let scannedUsers = {};
 
-// Access the camera
-navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-.then(stream => {
-    video.srcObject = stream;
-    video.setAttribute("playsinline", true); // for iOS
-    video.play();
-    requestAnimationFrame(tick);
-})
-.catch(err => {
-    scanResult.textContent = "Camera access denied: " + err;
-    scanResult.classList.add("bg-red-500");
-});
+  // QR scanner
+  let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
+  scanner.addListener('scan', function(content) {
+      fetch('/admin/scan_qr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ qr_data: content })
+      })
+      .then(res => res.json())
+      .then(data => {
+          if(data.success){
+              alert(`${data.name} scanned successfully! Total: ${data.count}`);
 
-// QR scanning loop
-function tick() {
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              // Update scannedUsers object
+              scannedUsers[data.name] = { 
+                  name: data.name, 
+                  email: '', // optional, fetch from server if needed
+                  course: '', // optional
+                  total_scans: data.count 
+              };
 
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: "dontInvert",
-        });
+              renderTable();
+          } else {
+              alert(data.message);
+          }
+      });
+  });
 
-        if (code) {
-            const userId = parseInt(code.data.split("user_id:")[1].split(",")[0]);
-            scanResult.textContent = `Scanning user ID: ${userId}...`;
-            scanResult.classList.add("bg-yellow-500");
+  Instascan.Camera.getCameras().then(function (cameras) {
+      if (cameras.length > 0) {
+          scanner.start(cameras[0]);
+      } else {
+          console.error('No cameras found.');
+      }
+  }).catch(function (e) {
+      console.error(e);
+  });
 
-            fetch('/admin/scan_qr', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    scanResult.textContent = `✅ ${data.name} scanned! Mess count: ${data.count}`;
-                    scanResult.classList.remove("bg-yellow-500");
-                    scanResult.classList.add("bg-green-500");
-                } else {
-                    scanResult.textContent = `❌ Error: ${data.message}`;
-                    scanResult.classList.remove("bg-yellow-500");
-                    scanResult.classList.add("bg-red-500");
-                }
-            });
-        }
-    }
-    requestAnimationFrame(tick);
-}
+  function renderTable(){
+      const tbody = document.querySelector('#scannedUsersTable tbody');
+      tbody.innerHTML = '';
+      let i = 1;
+      for(let key in scannedUsers){
+          let u = scannedUsers[key];
+          tbody.innerHTML += `<tr>
+              <td>${i++}</td>
+              <td>${u.name}</td>
+              <td>${u.email}</td>
+              <td>${u.course}</td>
+              <td>${u.total_scans}</td>
+          </tr>`;
+      }
+  }
 </script>
-
-<style>
-/* Ensure video is visible and responsive */
-video {
-    width: 100%;
-    max-height: 450px;
-    object-fit: cover;
-    border-radius: 1rem 1rem 0 0;
-}
-
-/* Smooth transition for scan result */
-#scan-result {
-    transition: background-color 0.3s ease, transform 0.2s ease;
-}
-
-/* Flash effect when QR is scanned */
-.bg-green-500 {
-    animation: flash 0.5s ease;
-}
-
-@keyframes flash {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-}
-</style>
 {% endblock %}
