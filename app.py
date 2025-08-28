@@ -737,7 +737,8 @@ def scan_qr():
     if not getattr(current_user, 'is_admin', False):
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    data = request.get_json(silent=True) or request.form
+    # Get JSON data
+    data = request.get_json(silent=True)
     qr_data = data.get('qr_data')
     meal_type = data.get('meal_type')
     today = date.today()
@@ -747,17 +748,18 @@ def scan_qr():
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        # Get user info
+
+        # Get user info from QR code
         cur.execute("SELECT id, name, email, course FROM users WHERE id=%s", (qr_data,))
         user = cur.fetchone()
         if not user:
             return jsonify({'success': False, 'message': 'User not found'}), 404
 
-        # Insert attendance (ignore duplicates)
+        # Insert attendance for this meal, ignore duplicates
         cur.execute("""
             INSERT IGNORE INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
-        """, (qr_data, meal_type, today))
+        """, (user['id'], meal_type, today))
         mysql.connection.commit()
 
         # Get total scans for this meal today
