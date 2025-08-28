@@ -10,15 +10,7 @@ from datetime import datetime, time
 
 # ---------------- Flask App ----------------
 app = Flask(__name__)
-app.secret_key = 'supersecretkey'
-
-# ---------------- MySQL CONFIG ----------------
-app.config['MYSQL_HOST'] = 'dpg-d2kbemv5r7bs73eljh4g-a'
-app.config['MYSQL_USER'] = 'siberia_mess_app_user'
-app.config['MYSQL_PASSWORD'] = 'lfFfFk3uGBHj5nkdrowYYHMlVGzyUB0o'
-app.config['MYSQL_DB'] = 'siberia_mess_app'
-app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
-app.config['MYSQL_PORT'] =5432
+app.config.from_object(Config)
 
 mysql = MySQL(app)
 
@@ -106,7 +98,10 @@ with app.app_context():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    cur = mysql.connection.cursor()
+    cur.execute("SELECT 'Hello from Railway MySQL!'")
+    result = cur.fetchone()
+    return f"<h1>{result[0]}</h1>"
 
 # -------- REGISTER --------
 # -------- REGISTER --------
