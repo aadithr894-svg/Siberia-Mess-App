@@ -737,75 +737,71 @@ def admin_qr_scan():
 @login_required
 def scan_qr():
     if not getattr(current_user, 'is_admin', False):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+        return jsonify({
+            'success': False,
+            'message': 'Unauthorized: current user is not admin',
+        }), 403
 
-    data = request.get_json(silent=True)
-    qr_data = data.get('qr_data')
+    data = request.get_json(silent=True) or request.form
+    user_id = data.get('user_id')
+    meal_type = data.get('meal_type')
 
-    if not qr_data:
-        return jsonify({'success': False, 'message': 'No QR data provided'}), 400
-
-    # Auto-detect meal
-    now = datetime.now()
-    hours = now.hour + now.minute / 60
-    if 7.5 <= hours <= 9:
-        meal_type = 'breakfast'
-    elif 12 <= hours <= 14:
-        meal_type = 'lunch'
-    else:
-        meal_type = 'dinner'
-
+    from datetime import date
     today = date.today()
+
+    if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
+        return jsonify({'success': False, 'message': 'Invalid data'}), 400
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Insert attendance (ignore duplicates)
+        # Check if already scanned
         cur.execute("""
-            INSERT IGNORE INTO meal_attendance (user_id, meal_type, attendance_date)
+            SELECT id FROM meal_attendance
+            WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
+        """, (user_id, meal_type, today))
+        existing = cur.fetchone()
+
+        if existing:
+            cur.close()
+            return jsonify({
+                'success': False,
+                'message': f'User already scanned for {meal_type} today'
+            }), 400
+
+        # Insert new attendance
+        cur.execute("""
+            INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
-        """, (qr_data, meal_type, today))
+        """, (user_id, meal_type, today))
         mysql.connection.commit()
 
-        # Count for this meal
+        # Count total users
         cur.execute("""
             SELECT COUNT(*) AS count FROM meal_attendance
             WHERE meal_type=%s AND attendance_date=%s
         """, (meal_type, today))
-        meal_count = cur.fetchone()['count']
+        result = cur.fetchone()
 
-        # Get totals for all meals today
-        cur.execute("""
-            SELECT meal_type, COUNT(*) as count
-            FROM meal_attendance
-            WHERE attendance_date=%s
-            GROUP BY meal_type
-        """, (today,))
-        totals = {row['meal_type']: row['count'] for row in cur.fetchall()}
-
-        # Get user info
-        cur.execute("SELECT name, email, course FROM users WHERE id=%s", (qr_data,))
+        # Get user name
+        cur.execute("SELECT name, email, course FROM users WHERE id=%s", (user_id,))
         user = cur.fetchone()
         cur.close()
 
         if not user:
-            return jsonify({'success': False, 'message': f'User {qr_data} not found'}), 404
+            return jsonify({'success': False, 'message': 'User not found'}), 404
 
         return jsonify({
             'success': True,
             'name': user['name'],
-            'email': user['email'] or '',
-            'course': user['course'] or '',
-            'count': meal_count,
-            'totals': {
-                'breakfast': totals.get('breakfast', 0),
-                'lunch': totals.get('lunch', 0),
-                'dinner': totals.get('dinner', 0)
-            }
+            'email': user['email'],
+            'course': user['course'],
+            'count': result['count']
         })
 
     except MySQLdb.Error as e:
-        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}),500
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------

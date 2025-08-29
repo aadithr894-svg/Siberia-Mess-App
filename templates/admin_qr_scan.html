@@ -13,7 +13,7 @@
         <th>Email</th>
         <th>Course</th>
         <th>Meal</th>
-        <th>Total Scans (this meal)</th>
+        <th>Total Scans</th>
       </tr>
     </thead>
     <tbody>
@@ -21,34 +21,17 @@
     </tbody>
   </table>
 
-  <!-- Live Meal Totals -->
-  <h4>📊 Live Meal Totals</h4>
-  <table class="table table-bordered table-striped" id="mealTotals">
-    <thead>
-      <tr>
-        <th>Breakfast</th>
-        <th>Lunch</th>
-        <th>Dinner</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td id="breakfastTotal">0</td>
-        <td id="lunchTotal">0</td>
-        <td id="dinnerTotal">0</td>
-      </tr>
-    </tbody>
-  </table>
-
   <!-- QR Scanner -->
   <div id="reader" style="width:400px;height:300px;border:1px solid #ccc;"></div>
+  <div id="result" class="mt-3 text-center text-success"></div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js"></script>
 <script>
   const lastUserTbody = document.querySelector('#lastScannedUser tbody');
+  const resultDiv = document.getElementById("result");
+  let lastScanTime = 0;
 
-  // Auto-detect meal
   function detectMeal() {
     const now = new Date();
     const hours = now.getHours() + now.getMinutes()/60;
@@ -57,52 +40,67 @@
     return 'dinner';
   }
 
-  function updateLastScanned(data) {
+  function updateLastScanned(data, meal) {
     lastUserTbody.innerHTML = `
       <tr>
         <td>${data.name}</td>
         <td>${data.email}</td>
         <td>${data.course}</td>
-        <td>${detectMeal()}</td>
+        <td>${meal}</td>
         <td>${data.count}</td>
       </tr>
     `;
   }
 
-  function updateMealTotals(totals) {
-    document.getElementById("breakfastTotal").textContent = totals.breakfast;
-    document.getElementById("lunchTotal").textContent = totals.lunch;
-    document.getElementById("dinnerTotal").textContent = totals.dinner;
-  }
+  function onScanSuccess(decodedText) {
+    const now = Date.now();
+    if (now - lastScanTime < 2000) return; // throttle 2s
+    lastScanTime = now;
 
-  function scanSuccess(qrMessage) {
-    fetch('/admin/scan_qr', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ qr_data: qrMessage })
+    let user_id = null;
+    try {
+      const parts = decodedText.split(",");
+      for (let p of parts) {
+        if (p.startsWith("user_id:")) {
+          user_id = p.split(":")[1];
+          break;
+        }
+      }
+    } catch (e) { console.error("QR parse error:", e); }
+
+    if (!user_id) {
+      resultDiv.innerText = "❌ Invalid QR code!";
+      return;
+    }
+
+    const meal = detectMeal();
+    fetch("/admin/scan_qr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user_id, meal_type: meal })
     })
     .then(res => res.json())
     .then(data => {
-      if(data.success) {
-        updateLastScanned(data);
-        updateMealTotals(data.totals);
+      if (data.success) {
+        resultDiv.innerText = `✅ ${data.name} marked for ${meal}. Total: ${data.count}`;
+        updateLastScanned(data, meal);
       } else {
-        console.error(data.message);
+        resultDiv.innerText = `❌ ${data.message}`;
       }
     })
-    .catch(err => console.error(err));
+    .catch(err => {
+      console.error(err);
+      resultDiv.innerText = "❌ Server error.";
+    });
   }
 
-  // QR scanner init
-  const html5QrcodeScanner = new Html5Qrcode("reader");
-  Html5Qrcode.getCameras().then(cameras => {
-    if(cameras && cameras.length) {
-      html5QrcodeScanner.start(
-        cameras[0].id,
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        scanSuccess
-      ).catch(err => console.error("QR Scanner failed to start:", err));
-    } else console.warn("No cameras found");
-  }).catch(err => console.error(err));
+  function onScanFailure(error) {
+    // Ignore scan errors
+  }
+
+  const html5QrcodeScanner = new Html5QrcodeScanner(
+    "reader", { fps: 10, qrbox: 250 }
+  );
+  html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 </script>
 {% endblock %}
