@@ -949,7 +949,6 @@ def admin_qr_counts():
 
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-    # ✅ Fetch all saved counts (from confirmed_meal_counts)
     cur.execute("""
         SELECT count_date, meal_type, total_people
         FROM confirmed_meal_counts
@@ -958,10 +957,15 @@ def admin_qr_counts():
     rows = cur.fetchall()
     cur.close()
 
-    # ✅ Convert into dict-of-dicts for Jinja
     counts_by_date = {}
     for row in rows:
-        d = row["count_date"].strftime("%Y-%m-%d")  # normalize date as string
+        count_date = row["count_date"]
+        # ensure it's always a string
+        if hasattr(count_date, "strftime"):
+            d = count_date.strftime("%Y-%m-%d")
+        else:
+            d = str(count_date)
+
         if d not in counts_by_date:
             counts_by_date[d] = {}
         counts_by_date[d][row["meal_type"]] = row["total_people"]
