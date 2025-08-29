@@ -816,39 +816,45 @@ def scan_qr():
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
-@app.route('/admin/qr_scan_counts')
+@app.route("/admin/qr_scan_counts")
 @login_required
 def qr_scan_counts():
-    if not getattr(current_user, "is_admin", False):
-        flash("Unauthorized", "danger")
-        return redirect(url_for("user_dashboard"))
-
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-    # Fetch saved counts
-    cur.execute("""
-        SELECT count_date, meal_type, total_people
-        FROM confirmed_meal_counts
-        ORDER BY count_date ASC
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("""
+        SELECT meal_date, meal_type, total_count 
+        FROM daily_meal_attendance 
+        ORDER BY meal_date ASC
     """)
-    rows = cur.fetchall()
-    cur.close()
+    rows = cursor.fetchall()
+    cursor.close()
 
     counts_by_date = {}
     for row in rows:
-        count_date = row["count_date"]
-        # Ensure string date
-        if hasattr(count_date, "strftime"):
-            d = count_date.strftime("%Y-%m-%d")
-        else:
-            d = str(count_date)
+        date = row['meal_date']
+        meal_type = row['meal_type']
+        count = row['total_count']
+        if date not in counts_by_date:
+            counts_by_date[date] = {}
+        counts_by_date[date][meal_type] = count
 
-        if d not in counts_by_date:
-            counts_by_date[d] = {}
-        counts_by_date[d][row["meal_type"]] = row["total_people"]
+    # Prepare chart data arrays
+    dates = list(counts_by_date.keys())
+    breakfast_data = [counts.get("breakfast", 0) for counts in counts_by_date.values()]
+    lunch_data = [counts.get("lunch", 0) for counts in counts_by_date.values()]
+    dinner_data = [counts.get("dinner", 0) for counts in counts_by_date.values()]
 
-    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
+    return render_template(
+        "admin_qr_count.html",
+        counts_by_date=counts_by_date,
+        dates=dates,
+        breakfast_data=breakfast_data,
+        lunch_data=lunch_data,
+        dinner_data=dinner_data,
+    )
 
+    )
+
+    )
 
 
 # Temporary live counters (resettable anytime)
