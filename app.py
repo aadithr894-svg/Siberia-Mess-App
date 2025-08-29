@@ -816,41 +816,35 @@ def scan_qr():
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
-@app.route("/admin/qr_scan_counts")
+@app.route('/admin/qr_scan_counts')
 @login_required
 def qr_scan_counts():
-    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor = mysql.connection.cursor()
     cursor.execute("""
-        SELECT meal_date, meal_type, total_count 
-        FROM daily_meal_attendance 
-        ORDER BY meal_date ASC
+        SELECT DATE(scan_time) as date, meal_type, COUNT(*) as count
+        FROM daily_meal_attendance
+        GROUP BY DATE(scan_time), meal_type
+        ORDER BY date ASC
     """)
     rows = cursor.fetchall()
     cursor.close()
 
     counts_by_date = {}
     for row in rows:
-        date = row['meal_date']
+        date = str(row['date'])
         meal_type = row['meal_type']
-        count = row['total_count']
+        count = row['count']
         if date not in counts_by_date:
             counts_by_date[date] = {}
         counts_by_date[date][meal_type] = count
 
-    # Prepare chart data arrays
-    dates = list(counts_by_date.keys())
-    breakfast_data = [counts.get("breakfast", 0) for counts in counts_by_date.values()]
-    lunch_data = [counts.get("lunch", 0) for counts in counts_by_date.values()]
-    dinner_data = [counts.get("dinner", 0) for counts in counts_by_date.values()]
+    print("DEBUG counts_by_date =", counts_by_date)  # 👈 check logs on Render
 
     return render_template(
         "admin_qr_count.html",
-        counts_by_date=counts_by_date,
-        dates=dates,
-        breakfast_data=breakfast_data,
-        lunch_data=lunch_data,
-        dinner_data=dinner_data,
+        counts_by_date=counts_by_date
     )
+
 
     
 
@@ -948,37 +942,52 @@ def add_count():
 
 
 
-@app.route('/admin/qr_counts')
+@app.route('/admin/qr_scan_counts')
 @login_required
 def admin_qr_counts():
-    if not getattr(current_user, "is_admin", False):
-        flash("Unauthorized", "danger")
-        return redirect(url_for("user_dashboard"))
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT meal_date, meal_type, total_count FROM daily_meal_attendance ORDER BY meal_date ASC")
+    data = cursor.fetchall()
+    cursor.close()
 
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-    cur.execute("""
-        SELECT count_date, meal_type, total_people
-        FROM confirmed_meal_counts
-        ORDER BY count_date ASC
-    """)
-    rows = cur.fetchall()
-    cur.close()
-
+    # Transform data for template
     counts_by_date = {}
-    for row in rows:
-        count_date = row["count_date"]
-        # ensure it's always a string
-        if hasattr(count_date, "strftime"):
-            d = count_date.strftime("%Y-%m-%d")
-        else:
-            d = str(count_date)
+    for row in data:
+        date = row[0].strftime("%Y-%m-%d")
+        meal_type = row[1]
+        count = row[2]
 
-        if d not in counts_by_date:
-            counts_by_date[d] = {}
-        counts_by_date[d][row["meal_type"]] = row["total_people"]
+        if date not in counts_by_date:
+            counts_by_date[date] = {}
+        counts_by_date[date][meal_type] = count
 
     return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
+
+
+@app.route('/admin/add_count', methods=['POST'])
+@login_required
+def add_meal_count():
+    meal_date = request.form['meal_date']
+    meal_type = request.form['meal_type']
+
+    cursor = mysql.connection.cursor()
+
+    # Check if row exists
+    cursor.execute("SELECT total_count FROM daily_meal_attendance WHERE meal_date=%s AND meal_type=%s", (meal_date, meal_type))
+    row = cursor.fetchone()
+
+    if row:
+        # Increment existing count
+        cursor.execute("UPDATE daily_meal_attendance SET total_count = total_count + 1 WHERE meal_date=%s AND meal_type=%s", (meal_date, meal_type))
+    else:
+        # Insert new row with count 1
+        cursor.execute("INSERT INTO daily_meal_attendance (meal_date, meal_type, total_count) VALUES (%s, %s, 1)", (meal_date, meal_type))
+
+    mysql.connection.commit()
+    cursor.close()
+
+    flash(f"{meal_type.capitalize()} count updated for {meal_date}", "success")
+    return redirect(url_for('admin_qr_count'))  # make sure your template route is named this
 
 
 @app.route('/admin/users_meal_counts')
