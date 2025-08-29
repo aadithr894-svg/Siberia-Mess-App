@@ -816,7 +816,6 @@ def scan_qr():
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
-from datetime import date
 @app.route('/admin/qr_scan_counts')
 @login_required
 def qr_scan_counts():
@@ -826,7 +825,7 @@ def qr_scan_counts():
 
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-    # ✅ Get all saved counts from confirmed_meal_counts
+    # Fetch saved counts
     cur.execute("""
         SELECT count_date, meal_type, total_people
         FROM confirmed_meal_counts
@@ -835,11 +834,10 @@ def qr_scan_counts():
     rows = cur.fetchall()
     cur.close()
 
-    # ✅ Build dict: { "2025-08-29": {"breakfast":10, "lunch":20, "dinner":15}, ... }
     counts_by_date = {}
     for row in rows:
         count_date = row["count_date"]
-        # Make sure it's a string
+        # Ensure string date
         if hasattr(count_date, "strftime"):
             d = count_date.strftime("%Y-%m-%d")
         else:
@@ -865,20 +863,32 @@ def get_live_count(meal_type):
     return jsonify({'success': True, 'count': live_counts.get(meal_type, 0)})
 
 # ✅ Reset live count manually (no save)
-@app.route('/admin/reset_live_count', methods=['POST'])
+@app.route('/admin/reset_count', methods=['POST'])
 @login_required
-def reset_live_count():
-    if not getattr(current_user, 'is_admin', False):
+def reset_count():
+    if not current_user.is_admin:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    data = request.get_json()
-    meal_type = data.get('meal_type')
+    meal = request.json.get('meal_type')
+    today = date.today()
 
-    if meal_type not in live_counts:
-        return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
+    try:
+        cur = mysql.connection.cursor()
 
-    live_counts[meal_type] = 0
-    return jsonify({'success': True, 'meal_type': meal_type, 'count': 0})
+        # ✅ Clear today's attendance for that meal (so users can re-scan)
+        cur.execute("""
+            DELETE FROM meal_attendance
+            WHERE meal_type=%s AND attendance_date=%s
+        """, (meal, today))
+        mysql.connection.commit()
+        cur.close()
+
+        # ✅ Reset live count only (daily_meal_counts stays untouched)
+        live_counts[meal] = 0  
+
+        return jsonify({'success': True, 'message': f'{meal.capitalize()} reset done'})
+    except MySQLdb.Error as e:
+        return jsonify({'success': False, 'message': str(e)})
 
 
 @app.route('/admin/live_count/<meal_type>')
