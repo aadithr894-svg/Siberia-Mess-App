@@ -946,22 +946,24 @@ def add_count():
 @login_required
 def admin_qr_counts():
     cursor = mysql.connection.cursor()
-    cursor.execute("SELECT meal_date, meal_type, total_count FROM daily_meal_attendance ORDER BY meal_date ASC")
-    data = cursor.fetchall()
-    cursor.close()
 
-    # Transform data for template
+    cursor.execute("""
+        SELECT scan_date AS date, meal_type, COUNT(*) AS count
+        FROM qr_scans
+        GROUP BY scan_date, meal_type
+        ORDER BY scan_date ASC
+    """)
+    data = cursor.fetchall()
+
     counts_by_date = {}
     for row in data:
-        date = row[0].strftime("%Y-%m-%d")
-        meal_type = row[1]
-        count = row[2]
-
+        date, meal_type, count = row
         if date not in counts_by_date:
             counts_by_date[date] = {}
         counts_by_date[date][meal_type] = count
 
-    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
+    cursor.close()
+    return render_template("admin_qr_count.html", counts_by_date=counts_by_date))
 
 
 @app.route('/admin/add_count', methods=['POST'])
