@@ -1,63 +1,57 @@
 {% extends "admin_base.html" %}
 {% block content %}
 <div class="container mt-4">
-  <h2>📊 QR Scan Counts ({{ today }})</h2>
+  <h2>📊 Mess Attendance Counts</h2>
+  <p>Shows confirmed totals (after clicking “Add Count” in scanner page).</p>
   <hr>
 
-  <!-- Today’s Meal Counts -->
-  <h4>Today’s Meal Totals</h4>
-  <canvas id="mealChart"></canvas>
-
-  <hr>
-
-  <!-- Per-user Scan Totals -->
-  <h4>Per User Scan Totals</h4>
-  <table class="table table-bordered table-striped">
+  <table class="table table-bordered table-striped text-center">
     <thead>
       <tr>
-        <th>#</th>
-        <th>Name</th>
-        <th>Course</th>
-        <th>Total Scans</th>
+        <th>Date</th>
+        <th>Breakfast</th>
+        <th>Lunch</th>
+        <th>Dinner</th>
       </tr>
     </thead>
     <tbody>
-      {% for u in users %}
+      {% for date, meals in counts_by_date.items() %}
       <tr>
-        <td>{{ loop.index }}</td>
-        <td>{{ u.name }}</td>
-        <td>{{ u.course }}</td>
-        <td>{{ u.total_scans }}</td>
+        <td>{{ date }}</td>
+        <td>{{ meals.get('breakfast', 0) }}</td>
+        <td>{{ meals.get('lunch', 0) }}</td>
+        <td>{{ meals.get('dinner', 0) }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+
+  <!-- Optional Chart -->
+  <canvas id="mealChart"></canvas>
 </div>
 
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  const mealData = {
-    labels: ["Breakfast", "Lunch", "Dinner"],
-    datasets: [{
-      label: 'Scans',
-      data: [
-        {{ meal_counts.breakfast[0].total_users if meal_counts.breakfast else 0 }},
-        {{ meal_counts.lunch[0].total_users if meal_counts.lunch else 0 }},
-        {{ meal_counts.dinner[0].total_users if meal_counts.dinner else 0 }}
-      ],
-      backgroundColor: ['#36A2EB', '#FFCE56', '#FF6384'],
-    }]
-  };
+  const labels = {{ counts_by_date.keys()|list|tojson }};
+  const breakfastData = {{ [meals.get('breakfast', 0) for meals in counts_by_date.values()]|tojson }};
+  const lunchData = {{ [meals.get('lunch', 0) for meals in counts_by_date.values()]|tojson }};
+  const dinnerData = {{ [meals.get('dinner', 0) for meals in counts_by_date.values()]|tojson }};
 
   new Chart(document.getElementById('mealChart'), {
-    type: 'bar',
-    data: mealData,
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Breakfast', data: breakfastData, borderColor: '#36A2EB', fill: false },
+        { label: 'Lunch', data: lunchData, borderColor: '#FFCE56', fill: false },
+        { label: 'Dinner', data: dinnerData, borderColor: '#FF6384', fill: false }
+      ]
+    },
     options: {
       responsive: true,
       plugins: {
-        legend: { display: true, position: 'top' },
-        title: { display: true, text: "Meal Scan Counts" }
+        legend: { position: 'top' },
+        title: { display: true, text: "Daily Meal Attendance" }
       }
     }
   });

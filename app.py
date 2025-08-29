@@ -852,6 +852,101 @@ def qr_scan_counts():
         users=users
     )
 
+@app.route('/admin/live_count/<meal_type>')
+@login_required
+def live_count(meal_type):
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+    today = date.today()
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cur.execute("""
+        SELECT COUNT(*) AS total FROM meal_attendance
+        WHERE attendance_date=%s AND meal_type=%s
+    """, (today, meal_type))
+    result = cur.fetchone()
+    cur.close()
+
+    return jsonify({'success': True, 'meal_type': meal_type, 'count': result['total']})
+
+
+
+@app.route('/admin/add_count', methods=['POST'])
+@login_required
+def add_count():
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    meal_type = data.get('meal_type')
+    today = date.today()
+
+    if meal_type not in ["breakfast", "lunch", "dinner"]:
+        return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
+
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Count attendance
+    cur.execute("""
+        SELECT COUNT(*) AS total FROM meal_attendance
+        WHERE meal_type=%s AND attendance_date=%s
+    """, (meal_type, today))
+    result = cur.fetchone()
+    total = result['total']
+
+    # Insert confirmed count
+    cur.execute("""
+        INSERT INTO mess_counts (count_date, meal_type, total_people)
+        VALUES (%s, %s, %s)
+    """, (today, meal_type, total))
+
+    # Reset live count = delete today's scans for that meal
+    cur.execute("""
+        DELETE FROM meal_attendance
+        WHERE meal_type=%s AND attendance_date=%s
+    """, (meal_type, today))
+
+    mysql.connection.commit()
+    cur.close()
+
+    return jsonify({
+        'success': True,
+        'count_date': str(today),
+        'meal_type': meal_type,
+        'total_people': total
+    })
+
+
+
+@app.route('/admin/qr_counts')
+@login_required
+def admin_qr_counts():
+    if not current_user.is_admin:
+        flash("Unauthorized", "danger")
+        return redirect(url_for('home'))
+
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Get all counts grouped by date+meal
+    cur.execute("""
+        SELECT count_date, meal_type, total_people
+        FROM mess_counts
+        ORDER BY count_date DESC, FIELD(meal_type,'breakfast','lunch','dinner')
+    """)
+    rows = cur.fetchall()
+    cur.close()
+
+    # Organize by date
+    counts_by_date = {}
+    for r in rows:
+        if r['count_date'] not in counts_by_date:
+            counts_by_date[r['count_date']] = {}
+        counts_by_date[r['count_date']][r['meal_type']] = r['total_people']
+
+    return render_template("admin_qr_counts.html", counts_by_date=counts_by_date)
+
+
+
 
 @app.route('/admin/users_meal_counts')
 @login_required
