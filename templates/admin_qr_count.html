@@ -1,53 +1,16 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Admin Meal Count</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 30px; }
-        table { border-collapse: collapse; width: 50%; margin-top: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-        th { background-color: #f2f2f2; }
-        form { margin-bottom: 20px; }
-        select, input[type=date] { margin-right: 10px; padding: 5px; }
-        button { padding: 5px 10px; }
-        .flash { color: green; }
-    </style>
-</head>
-<body>
-    <h1>Admin Meal Count</h1>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <!-- Add Count Form -->
-    <form method="POST" action="{{ url_for('add_meal_count') }}">
-        <label for="meal_date">Select Date:</label>
-        <input type="date" name="meal_date" required>
-
-        <label for="meal_type">Select Meal:</label>
-        <select name="meal_type" required>
-            <option value="breakfast">Breakfast</option>
-            <option value="lunch">Lunch</option>
-            <option value="dinner">Dinner</option>
-        </select>
-
-        <button type="submit">Add Count</button>
-    </form>
-
-    <!-- Counts Table -->
-    <table>
+{% extends 'base.html' %}
+{% block content %}
+<h2>Daily Meal Attendance</h2>
+<table border="1" cellpadding="5" cellspacing="0">
+    <thead>
         <tr>
             <th>Date</th>
             <th>Breakfast</th>
             <th>Lunch</th>
             <th>Dinner</th>
         </tr>
+    </thead>
+    <tbody>
         {% for date, meals in counts_by_date.items() %}
         <tr>
             <td>{{ date }}</td>
@@ -56,6 +19,6 @@
             <td>{{ meals.get('dinner', 0) }}</td>
         </tr>
         {% endfor %}
-    </table>
-</body>
-</html>
+    </tbody>
+</table>
+{% endblock %}

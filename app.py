@@ -816,34 +816,31 @@ def scan_qr():
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
-@app.route('/admin/qr_scan_counts')
+@app.route("/admin/qr_scan_counts")
 @login_required
 def qr_scan_counts():
     cursor = mysql.connection.cursor()
+
+    # Fetch daily meal counts
     cursor.execute("""
-        SELECT DATE(scan_time) as date, meal_type, COUNT(*) as count
+        SELECT DATE(scan_time) AS scan_date, meal_type, COUNT(*) AS count
         FROM daily_meal_attendance
         GROUP BY DATE(scan_time), meal_type
-        ORDER BY date ASC
+        ORDER BY scan_date ASC
     """)
-    rows = cursor.fetchall()
+    data = cursor.fetchall()
     cursor.close()
 
+    # Prepare dictionary for template
     counts_by_date = {}
-    for row in rows:
-        date = str(row['date'])
-        meal_type = row['meal_type']
-        count = row['count']
+    for row in data:
+        date, meal_type, count = row
         if date not in counts_by_date:
-            counts_by_date[date] = {}
+            counts_by_date[date] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
         counts_by_date[date][meal_type] = count
 
-    print("DEBUG counts_by_date =", counts_by_date)  # 👈 check logs on Render
+    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
 
-    return render_template(
-        "admin_qr_count.html",
-        counts_by_date=counts_by_date
-    )
 
 
     
