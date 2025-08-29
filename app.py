@@ -852,6 +852,37 @@ def qr_scan_counts():
         users=users
     )
 
+
+
+# Temporary live counters (resettable anytime)
+live_counts = {"breakfast": 0, "lunch": 0, "dinner": 0}
+
+@app.route("/admin/live_count/<meal>")
+@login_required
+def get_live_count(meal):
+    if not getattr(current_user, "is_admin", False):
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+    if meal not in live_counts:
+        return jsonify({"success": False, "message": "Invalid meal"}), 400
+    return jsonify({"success": True, "count": live_counts[meal]})
+
+@app.route("/admin/reset_live_count", methods=["POST"])
+@login_required
+def reset_live_count():
+    if not getattr(current_user, "is_admin", False):
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+    data = request.get_json(silent=True) or {}
+    meal = data.get("meal_type")
+    if meal not in live_counts:
+        return jsonify({"success": False, "message": "Invalid meal"}), 400
+
+    live_counts[meal] = 0
+    return jsonify({"success": True, "meal_type": meal, "message": "Live count reset"})
+
+
+
+
 @app.route('/admin/live_count/<meal_type>')
 @login_required
 def live_count(meal_type):

@@ -45,16 +45,15 @@
       display: inline-block;
     }
     button {
-      margin-top: 15px;
-      padding: 10px 20px;
+      margin: 10px;
+      padding: 10px 15px;
       border: none;
-      border-radius: 8px;
-      background: #28a745;
-      color: white;
-      font-size: 1em;
+      border-radius: 6px;
       cursor: pointer;
+      font-size: 1em;
     }
-    button:hover { background: #218838; }
+    #addCountBtn { background: #28a745; color: white; }
+    #resetBtn { background: #dc3545; color: white; }
     @media (max-width: 600px) {
       #scanner-card { width: 90%; padding: 15px; }
       #reader { max-width: 100%; }
@@ -67,22 +66,18 @@
   <div id="scanner-card">
     <div id="reader"></div>
     <div id="result">Scan a QR code to record attendance.</div>
-
-    <!-- 🔹 Live Count -->
-    <h3 id="liveCount" style="margin-top:20px; color:blue;">
-      Live Count: 0
-    </h3>
-
-    <!-- 🔹 Add Count Button -->
+    <div class="count-box" id="liveCount">🍽️ Live Count: 0</div>
+    <br>
     <button id="addCountBtn">➕ Add Count</button>
+    <button id="resetBtn">🔄 Reset</button>
   </div>
 
   <script>
     const resultDiv = document.getElementById("result");
-    const liveCountElem = document.getElementById("liveCount");
+    const liveCountDiv = document.getElementById("liveCount");
     let lastScanTime = 0;
 
-    // Auto-detect meal based on time
+    // Auto-detect meal
     function detectMeal() {
       const now = new Date();
       const hours = now.getHours() + now.getMinutes()/60;
@@ -91,32 +86,24 @@
       return 'dinner';
     }
 
-    // Update live count from backend
     function updateLiveCount() {
       const meal = detectMeal();
       fetch(`/admin/live_count/${meal}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          liveCountElem.innerText =
-            `Live Count (${meal}): ${data.count}`;
+          liveCountDiv.innerText = `🍽️ Live Count (${meal}): ${data.count}`;
         }
       });
     }
 
-    // Call every 3s
-    setInterval(updateLiveCount, 3000);
-    updateLiveCount();
-
-    // QR Scan Success
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      if (now - lastScanTime < 2000) return; // throttle: 2s
+      if (now - lastScanTime < 2000) return; // throttle
       lastScanTime = now;
 
       console.log("Decoded QR:", decodedText);
 
-      // Parse QR → extract user_id
       let user_id = null;
       try {
         const parts = decodedText.split(",");
@@ -138,7 +125,6 @@
 
       const meal = detectMeal();
 
-      // Send POST to backend
       fetch("/admin/scan_qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,9 +148,7 @@
       });
     }
 
-    function onScanFailure(error) {
-      // Ignore scan failures
-    }
+    function onScanFailure(error) { /* ignore */ }
 
     // Start scanner
     let html5QrcodeScanner = new Html5QrcodeScanner(
@@ -172,19 +156,43 @@
     );
     html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 
-    // Handle Add Count button
+    // Auto-refresh live count
+    setInterval(updateLiveCount, 3000);
+    updateLiveCount();
+
+    // Add Count
     document.getElementById("addCountBtn").addEventListener("click", function() {
       const meal = detectMeal();
       fetch("/admin/add_count", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ meal_type: meal })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meal_type: meal })
       })
       .then(res => res.json())
       .then(data => {
         if (data.success) {
           alert(`✅ Saved: ${data.total_people} people for ${data.meal_type} (${data.count_date})`);
-          updateLiveCount(); // resets live count after saving
+          updateLiveCount(); // resets to 0 after saving
+        } else {
+          alert("❌ " + data.message);
+        }
+      })
+      .catch(err => console.error(err));
+    });
+
+    // Reset Count
+    document.getElementById("resetBtn").addEventListener("click", function() {
+      const meal = detectMeal();
+      fetch("/admin/reset_live_count", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meal_type: meal })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert(`✅ Live count reset for ${meal}`);
+          liveCountDiv.innerText = `🍽️ Live Count (${meal}): 0`;
         } else {
           alert("❌ " + data.message);
         }
