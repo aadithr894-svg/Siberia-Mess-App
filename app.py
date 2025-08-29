@@ -852,9 +852,7 @@ def qr_scan_counts():
         dinner_data=dinner_data,
     )
 
-    )
-
-    )
+    
 
 
 # Temporary live counters (resettable anytime)
