@@ -817,45 +817,39 @@ def scan_qr():
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
 from datetime import date
-
 @app.route('/admin/qr_scan_counts')
 @login_required
 def qr_scan_counts():
-    if not current_user.is_admin:
+    if not getattr(current_user, "is_admin", False):
         flash("Unauthorized", "danger")
-        return redirect(url_for('user_dashboard'))
+        return redirect(url_for("user_dashboard"))
 
-    today = date.today()
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-    # Get today's meal counts
+    # ✅ Get all saved counts from confirmed_meal_counts
     cur.execute("""
-        SELECT meal_type, COUNT(*) AS count
-        FROM meal_attendance
-        WHERE attendance_date = %s
-        GROUP BY meal_type
-    """, (today,))
-    meal_counts = cur.fetchall()
-
-    # Get per-user scan totals (for today)
-    cur.execute("""
-        SELECT u.id, u.name, u.email, u.course, COUNT(ma.user_id) AS total_scans
-        FROM users u
-        LEFT JOIN meal_attendance ma ON u.id = ma.user_id AND ma.attendance_date = %s
-        GROUP BY u.id
-    """, (today,))
-    users = cur.fetchall()
+        SELECT count_date, meal_type, total_people
+        FROM confirmed_meal_counts
+        ORDER BY count_date ASC
+    """)
+    rows = cur.fetchall()
     cur.close()
 
-    return render_template('admin_qr_count.html', meal_counts=meal_counts, users=users, today=today)
+    # ✅ Build dict: { "2025-08-29": {"breakfast":10, "lunch":20, "dinner":15}, ... }
+    counts_by_date = {}
+    for row in rows:
+        count_date = row["count_date"]
+        # Make sure it's a string
+        if hasattr(count_date, "strftime"):
+            d = count_date.strftime("%Y-%m-%d")
+        else:
+            d = str(count_date)
 
+        if d not in counts_by_date:
+            counts_by_date[d] = {}
+        counts_by_date[d][row["meal_type"]] = row["total_people"]
 
-    return render_template(
-        "admin_qr_count.html",
-        today=selected_date,
-        meal_counts=meal_counts,
-        users=users
-    )
+    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
 
 
 
