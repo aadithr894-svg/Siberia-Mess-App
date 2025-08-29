@@ -1,82 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Admin QR Scanner</title>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <style>
-        #reader {
-            width: 500px;
-            margin: auto;
-        }
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding-top: 30px;
-        }
-        #result {
-            margin-top: 20px;
-            font-size: 1.2em;
-            color: green;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Admin QR Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9fafb;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    h2 {
+      margin: 20px 0;
+      color: #333;
+    }
+    #scanner-card {
+      max-width: 500px;
+      margin: auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    #reader {
+      width: 100%;
+      max-width: 400px;
+      margin: auto;
+    }
+    #result {
+      margin-top: 15px;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    .success { color: green; }
+    .error { color: red; }
+    .count-box {
+      margin-top: 20px;
+      font-size: 1.1em;
+      background: #eef;
+      padding: 10px;
+      border-radius: 8px;
+      display: inline-block;
+    }
+    @media (max-width: 600px) {
+      #scanner-card { width: 90%; padding: 15px; }
+      #reader { max-width: 100%; }
+    }
+  </style>
 </head>
 <body>
-    <h2>Live QR Scanner</h2>
+  <h2>📡 Admin QR Scanner</h2>
+
+  <div id="scanner-card">
     <div id="reader"></div>
     <div id="result">Scan a QR code to record attendance.</div>
+    <div class="count-box">🍽️ Total Scans Today: <span id="liveCount">0</span></div>
+  </div>
 
-    <script>
-        function onScanSuccess(decodedText, decodedResult) {
-            console.log("Decoded QR:", decodedText);
+  <script>
+    const resultDiv = document.getElementById("result");
+    const liveCount = document.getElementById("liveCount");
+    let lastScanTime = 0;
 
-            // Extract user_id from QR string (format: user_id:{id},email:{email},mess_count:{count})
-            let user_id = null;
-            try {
-                const parts = decodedText.split(",");
-                for (let p of parts) {
-                    if (p.startsWith("user_id:")) {
-                        user_id = p.split(":")[1];
-                        break;
-                    }
-                }
-            } catch (e) {
-                console.error("QR parse error:", e);
-            }
+    // Auto-detect meal based on time
+    function detectMeal() {
+      const now = new Date();
+      const hours = now.getHours() + now.getMinutes()/60;
+      if (hours >= 7.5 && hours <= 9) return 'breakfast';
+      if (hours >= 12 && hours <= 14) return 'lunch';
+      return 'dinner';
+    }
 
-            if (!user_id) {
-                document.getElementById("result").innerText = "Invalid QR code!";
-                return;
-            }
+    function onScanSuccess(decodedText) {
+      const now = Date.now();
+      if (now - lastScanTime < 2000) return; // throttle: wait 2s between scans
+      lastScanTime = now;
 
-            // Send POST request to Flask backend
-            fetch("/admin/scan_qr", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ user_id: user_id, meal_type: "lunch" }) // change meal_type as needed
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById("result").innerText = `✅ ${data.name} attendance recorded. Total: ${data.count}`;
-                } else {
-                    document.getElementById("result").innerText = `❌ Error: ${data.message}`;
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                document.getElementById("result").innerText = "❌ Network or server error.";
-            });
+      console.log("Decoded QR:", decodedText);
+
+      // Parse QR → extract user_id
+      let user_id = null;
+      try {
+        const parts = decodedText.split(",");
+        for (let p of parts) {
+          if (p.startsWith("user_id:")) {
+            user_id = p.split(":")[1];
+            break;
+          }
         }
+      } catch (e) {
+        console.error("QR parse error:", e);
+      }
 
-        function onScanFailure(error) {
-            // optional: console.warn(`Scan failed: ${error}`);
+      if (!user_id) {
+        resultDiv.innerText = "❌ Invalid QR code!";
+        resultDiv.className = "error";
+        return;
+      }
+
+      const meal = detectMeal();
+
+      // Send POST to backend
+      fetch("/admin/scan_qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user_id, meal_type: meal })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          resultDiv.innerText = `✅ ${data.name} marked for ${meal}`;
+          resultDiv.className = "success";
+          liveCount.innerText = data.count; // update live count
+        } else {
+          resultDiv.innerText = `❌ ${data.message}`;
+          resultDiv.className = "error";
         }
+      })
+      .catch(err => {
+        console.error(err);
+        resultDiv.innerText = "❌ Network error!";
+        resultDiv.className = "error";
+      });
+    }
 
-        let html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader", { fps: 10, qrbox: 250 }
-        );
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-    </script>
+    function onScanFailure(error) {
+      // We ignore scan failures (normal when nothing in front of camera)
+    }
+
+    // Start scanner
+    let html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader", { fps: 10, qrbox: 250 }
+    );
+    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+  </script>
 </body>
 </html>
