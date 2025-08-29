@@ -344,7 +344,8 @@ def user_dashboard():
 
     # Fetch late mess requests
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cur.execute("SELECT * FROM late_mess WHERE user_id = %s ORDER BY date DESC", (current_user.id,))
+    cur.execute("SELECT * FROM late_mess WHERE user_id = %s ORDER BY date_requested DESC", (current_user.id,))
+
     late_requests = cur.fetchall()
     cur.close()
 
