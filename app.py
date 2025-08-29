@@ -816,30 +816,35 @@ def scan_qr():
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
-@app.route("/admin/qr_scan_counts")
+@app.route('/admin/qr_scan_counts')
 @login_required
 def qr_scan_counts():
-    cursor = mysql.connection.cursor()
+    if not current_user.is_admin:
+        flash("Unauthorized", "danger")
+        return redirect(url_for('admin_dashboard'))
 
-    # Fetch daily meal counts
-    cursor.execute("""
-        SELECT DATE(scan_time) AS scan_date, meal_type, COUNT(*) AS count
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cur.execute("""
+        SELECT meal_date, meal_type, total_count
         FROM daily_meal_attendance
-        GROUP BY DATE(scan_time), meal_type
-        ORDER BY scan_date ASC
+        ORDER BY meal_date ASC
     """)
-    data = cursor.fetchall()
-    cursor.close()
+    data = cur.fetchall()
+    cur.close()
 
-    # Prepare dictionary for template
+    # Organize data for template
     counts_by_date = {}
     for row in data:
-        date, meal_type, count = row
-        if date not in counts_by_date:
-            counts_by_date[date] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
-        counts_by_date[date][meal_type] = count
+        meal_date = row['meal_date']
+        meal_type = row['meal_type']
+        total = row['total_count']
 
-    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
+        if meal_date not in counts_by_date:
+            counts_by_date[meal_date] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
+        counts_by_date[meal_date][meal_type] = total
+
+    return render_template('admin_qr_count.html', counts_by_date=counts_by_date)
+
 
 
 
@@ -905,16 +910,18 @@ def live_count(meal_type):
 
 
 
-# ✅ Add Count (persist to another table and reset live count)
 @app.route('/admin/add_count', methods=['POST'])
 @login_required
 def add_count():
     if not getattr(current_user, 'is_admin', False):
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    data = request.get_json()
+    data = request.get_json() or request.form
     meal_type = data.get('meal_type')
-    today = date.today()
+    meal_date = data.get('meal_date') or date.today().isoformat()
+
+    if meal_type not in ['breakfast', 'lunch', 'dinner']:
+        return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
 
     count = live_counts.get(meal_type, 0)
     if count == 0:
@@ -922,19 +929,28 @@ def add_count():
 
     try:
         cur = mysql.connection.cursor()
-        # Save into confirmed counts table
+        # Insert or update total count
         cur.execute("""
-            INSERT INTO confirmed_meal_counts (count_date, meal_type, total_people)
+            INSERT INTO daily_meal_attendance (meal_date, meal_type, total_count)
             VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE total_people = total_people + VALUES(total_people)
-        """, (today, meal_type, count))
+            ON DUPLICATE KEY UPDATE total_count = total_count + VALUES(total_count)
+        """, (meal_date, meal_type, count))
         mysql.connection.commit()
         cur.close()
 
-        live_counts[meal_type] = 0  # reset after saving
-        return jsonify({'success': True, 'meal_type': meal_type, 'total_people': count, 'count_date': str(today)})
+        # Reset live count
+        live_counts[meal_type] = 0
+
+        return jsonify({
+            'success': True,
+            'meal_type': meal_type,
+            'total_people_added': count,
+            'meal_date': meal_date
+        })
+
     except MySQLdb.Error as e:
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+
 
 
 
