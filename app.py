@@ -57,26 +57,26 @@ def create_admin():
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     # Check if admin already exists
-    cur.execute("SELECT * FROM users WHERE email = %s", ("admin@example.com",))
+    cur.execute("SELECT * FROM users WHERE email = %s", ("siberiamess4@gmail.com",))
     admin = cur.fetchone()
 
-    hashed_password = generate_password_hash("admin123")
+    hashed_password = generate_password_hash("siberia@123")
 
     if not admin:
         # Insert new admin
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, ("Super Admin", "admin@example.com", "0000000000", "N/A", hashed_password, "admin", 1))
+        """, ("Admin", "siberiamess4@gmail.com", "0000000000", "N/A", hashed_password, "admin", 1))
         mysql.connection.commit()
-        print("✅ Default admin created: email=admin@example.com, password=admin123")
+        print("✅ Default admin created: siberiamess4@gmail.com, password=siberia@123")
     else:
         # Make sure admin is approved and user_type is admin
         cur.execute("""
             UPDATE users
             SET user_type=%s, approved=%s, password=%s
             WHERE email=%s
-        """, ("admin", 1, hashed_password, "admin@example.com"))
+        """, ("admin", 1, hashed_password, "siberiamess4@gmail.com"))
         mysql.connection.commit()
         print("ℹ️ Admin already exists. Reset password and ensured approved=1.")
 
