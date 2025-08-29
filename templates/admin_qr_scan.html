@@ -62,6 +62,7 @@
       const hours = now.getHours() + now.getMinutes()/60;
       if (hours >= 7.5 && hours <= 9) return 'breakfast';
       if (hours >= 12 && hours <= 14) return 'lunch';
+	if (hours >= 19.5 && hours <= 21) return 'Dinner';
       return 'dinner';
     }
 
