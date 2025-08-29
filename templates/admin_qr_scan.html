@@ -6,31 +6,84 @@
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f9fafb;
-      margin: 0;
-      padding: 0;
-      text-align: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(120deg, #f6f9fc, #e9eff5);
+      margin: 0; padding: 0;
+      display: flex; flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
     }
-    h2 { margin: 20px 0; color: #333; }
+
+    h2 {
+      margin: 30px 0 15px 0;
+      color: #1a1a1a;
+      font-size: 2em;
+      text-shadow: 1px 1px 2px #ccc;
+    }
+
     #scanner-card {
-      max-width: 500px; margin: auto; background: #fff;
-      border-radius: 12px; padding: 20px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      max-width: 500px;
+      width: 90%;
+      background: #fff;
+      border-radius: 16px;
+      padding: 25px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      border: 2px solid #4caf50;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.3s;
     }
-    #reader { width: 100%; max-width: 400px; margin: auto; }
-    #result { margin-top: 15px; font-size: 1.2em; font-weight: bold; }
-    .success { color: green; }
-    .error { color: red; }
+
+    #scanner-card:hover {
+      transform: translateY(-5px);
+    }
+
+    #reader {
+      width: 100%;
+      max-width: 400px;
+      margin: 20px auto;
+      border: 3px dashed #4caf50;
+      border-radius: 12px;
+      padding: 10px;
+      background: #f0f7f5;
+    }
+
+    #result {
+      margin-top: 15px;
+      font-size: 1.2em;
+      font-weight: bold;
+      min-height: 1.5em;
+    }
+
+    .success { color: #4caf50; }
+    .error { color: #f44336; }
+
     .count-box {
-      margin-top: 20px; font-size: 1.1em; background: #eef;
-      padding: 10px; border-radius: 8px; display: inline-block;
+      margin-top: 20px;
+      font-size: 1.1em;
+      background: #eef7ff;
+      padding: 12px 18px;
+      border-radius: 12px;
+      display: inline-block;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
     }
+
     button {
-      margin-top: 10px; padding: 10px 20px;
-      border: none; border-radius: 8px;
-      font-size: 1em; cursor: pointer;
+      margin: 12px 8px 0 8px;
+      padding: 12px 25px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1em;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.2s, box-shadow 0.2s;
     }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
     .btn-success { background: #4caf50; color: white; }
     .btn-danger { background: #f44336; color: white; }
   </style>
@@ -56,35 +109,28 @@
     const mealTypeSpan = document.getElementById("mealType");
     let lastScanTime = 0;
 
-    // Auto-detect meal
     function detectMeal() {
       const now = new Date();
       const hours = now.getHours() + now.getMinutes()/60;
-      if (hours >= 7.5 && hours <= 9) return 'breakfast';
-      if (hours >= 12 && hours <= 14) return 'lunch';
-	if (hours >= 19.5 && hours <= 21) return 'Dinner';
-      return 'dinner';
+      if (hours >= 7.5 && hours <= 9) return 'Breakfast';
+      if (hours >= 12 && hours <= 14) return 'Lunch';
+      if (hours >= 19.5 && hours <= 21) return 'Dinner';
+      return 'Dinner';
     }
 
-    // Update live count from backend
     function updateLiveCount() {
       const meal = detectMeal();
       mealTypeSpan.innerText = meal;
       fetch(`/admin/live_count/${meal}`)
         .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            liveCount.innerText = data.count;
-          }
-        });
+        .then(data => { if (data.success) liveCount.innerText = data.count; });
     }
     setInterval(updateLiveCount, 3000);
     updateLiveCount();
 
-    // Scan success
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      if (now - lastScanTime < 2000) return; // throttle
+      if (now - lastScanTime < 2000) return;
       lastScanTime = now;
 
       let user_id = null;
@@ -108,7 +154,7 @@
       fetch("/admin/scan_qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: user_id, meal_type: meal })
+        body: JSON.stringify({ user_id, meal_type: meal })
       })
       .then(res => res.json())
       .then(data => {
@@ -129,11 +175,9 @@
 
     function onScanFailure(error) {}
 
-    // Start scanner
     let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
     html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 
-    // ➕ Add Count button
     document.getElementById("addCountBtn").addEventListener("click", () => {
       const meal = detectMeal();
       fetch("/admin/add_count", {
@@ -146,13 +190,10 @@
         if (data.success) {
           alert(`✅ Saved: ${data.total_people} for ${meal} (${data.count_date})`);
           updateLiveCount();
-        } else {
-          alert("❌ " + data.message);
-        }
+        } else { alert("❌ " + data.message); }
       });
     });
 
-    // 🔄 Reset button
     document.getElementById("resetCountBtn").addEventListener("click", () => {
       const meal = detectMeal();
       fetch("/admin/reset_count", {
@@ -164,12 +205,10 @@
       .then(data => {
         if (data.success) {
           alert(`🔄 ${meal} reset successful!`);
-          liveCount.innerText = "0"; // instant frontend reset
+          liveCount.innerText = "0";
           resultDiv.innerText = "✅ Ready for new scans.";
           resultDiv.className = "success";
-        } else {
-          alert("❌ " + data.message);
-        }
+        } else { alert("❌ " + data.message); }
       });
     });
   </script>
