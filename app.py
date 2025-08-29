@@ -921,32 +921,34 @@ def add_count():
 @app.route('/admin/qr_counts')
 @login_required
 def admin_qr_counts():
-    if not current_user.is_admin:
+    if not getattr(current_user, "is_admin", False):
         flash("Unauthorized", "danger")
-        return redirect(url_for('home'))
+        return redirect(url_for("user_dashboard"))
 
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-    # Get all counts grouped by date+meal
+    # ✅ Fetch all saved counts (from mess_counts table)
     cur.execute("""
         SELECT count_date, meal_type, total_people
         FROM mess_counts
-        ORDER BY count_date DESC, FIELD(meal_type,'breakfast','lunch','dinner')
+        ORDER BY count_date ASC
     """)
     rows = cur.fetchall()
     cur.close()
 
-    # Organize by date
+    # ✅ Convert into dict-of-dicts for Jinja
     counts_by_date = {}
-    for r in rows:
-        if r['count_date'] not in counts_by_date:
-            counts_by_date[r['count_date']] = {}
-        counts_by_date[r['count_date']][r['meal_type']] = r['total_people']
+    for row in rows:
+        d = row["count_date"].strftime("%Y-%m-%d")  # normalize date as string
+        if d not in counts_by_date:
+            counts_by_date[d] = {}
+        counts_by_date[d][row["meal_type"]] = row["total_people"]
 
-    return render_template("admin_qr_counts.html", counts_by_date=counts_by_date)
+    # ✅ Always return something safe (even if no data)
+    if not counts_by_date:
+        counts_by_date = {}
 
-
-
+    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
 
 @app.route('/admin/users_meal_counts')
 @login_required
