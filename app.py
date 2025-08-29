@@ -215,12 +215,12 @@ def reset_admin():
     cur.execute("""
         INSERT INTO users (name, email, phone, course, password, user_type, approved)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, ("Super Admin", "admin@example.com", "0000000000", "N/A",
+    """, ("Admin", "siberiamess4@gmail.com", "0000000000", "N/A",
           hashed_password, "admin", 1))
     mysql.connection.commit()
     cur.close()
 
-    return "✅ Admin reset: email=admin@example.com, password=admin123"
+    return "✅ Admin reset: siberiamess4@gmail.com, password=siberia@123"
 
 
 
