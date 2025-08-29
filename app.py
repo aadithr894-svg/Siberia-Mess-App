@@ -732,7 +732,6 @@ def admin_qr_scan():
     if not getattr(current_user, 'is_admin', False):
         return "Unauthorized", 403
     return render_template('admin_qr_scan.html', current_date=date.today().strftime("%Y-%m-%d"))
-
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
 def scan_qr():
@@ -746,7 +745,6 @@ def scan_qr():
     user_id = data.get('user_id')
     meal_type = data.get('meal_type')
 
-    from datetime import date
     today = date.today()
 
     if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
@@ -755,7 +753,7 @@ def scan_qr():
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Check if already scanned
+        # Check if already scanned for this meal today
         cur.execute("""
             SELECT id FROM meal_attendance
             WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
@@ -774,17 +772,25 @@ def scan_qr():
             INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
         """, (user_id, meal_type, today))
+
+        # ✅ Increment user mess_count (persistent in DB)
+        cur.execute("""
+            UPDATE users
+            SET mess_count = mess_count + 1
+            WHERE id = %s
+        """, (user_id,))
+
         mysql.connection.commit()
 
-        # Count total users
+        # Count total users attended for this meal today
         cur.execute("""
             SELECT COUNT(*) AS count FROM meal_attendance
             WHERE meal_type=%s AND attendance_date=%s
         """, (meal_type, today))
         result = cur.fetchone()
 
-        # Get user name
-        cur.execute("SELECT name, email, course FROM users WHERE id=%s", (user_id,))
+        # Get user details
+        cur.execute("SELECT name, email, course, mess_count FROM users WHERE id=%s", (user_id,))
         user = cur.fetchone()
         cur.close()
 
@@ -796,12 +802,12 @@ def scan_qr():
             'name': user['name'],
             'email': user['email'],
             'course': user['course'],
-            'count': result['count']
+            'count': result['count'],   # ✅ total meal attendance today
+            'mess_count': user['mess_count']  # ✅ persistent total
         })
 
     except MySQLdb.Error as e:
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
-
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
