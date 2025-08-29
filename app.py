@@ -732,19 +732,36 @@ def admin_qr_scan():
     if not getattr(current_user, 'is_admin', False):
         return "Unauthorized", 403
     return render_template('admin_qr_scan.html', current_date=date.today().strftime("%Y-%m-%d"))
+
+
+
+
+
+from flask import Flask, render_template, request, jsonify
+from flask_login import login_required, current_user
+from datetime import date
+import MySQLdb.cursors
+
+# 🔹 Temporary in-memory storage for live counts
+live_counts = {
+    "breakfast": 0,
+    "lunch": 0,
+    "dinner": 0
+}
+
+
+
+
+
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
 def scan_qr():
     if not getattr(current_user, 'is_admin', False):
-        return jsonify({
-            'success': False,
-            'message': 'Unauthorized: current user is not admin',
-        }), 403
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
     data = request.get_json(silent=True) or request.form
     user_id = data.get('user_id')
     meal_type = data.get('meal_type')
-
     today = date.today()
 
     if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
@@ -753,57 +770,45 @@ def scan_qr():
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Check if already scanned for this meal today
+        # Check duplicate scan
         cur.execute("""
             SELECT id FROM meal_attendance
             WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
         """, (user_id, meal_type, today))
-        existing = cur.fetchone()
-
-        if existing:
+        if cur.fetchone():
             cur.close()
-            return jsonify({
-                'success': False,
-                'message': f'User already scanned for {meal_type} today'
-            }), 400
+            return jsonify({'success': False, 'message': f'Already scanned for {meal_type} today'}), 400
 
-        # Insert new attendance
+        # Insert attendance
         cur.execute("""
             INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
         """, (user_id, meal_type, today))
 
-        # ✅ Increment user mess_count (persistent in DB)
-        cur.execute("""
-            UPDATE users
-            SET mess_count = mess_count + 1
-            WHERE id = %s
-        """, (user_id,))
-
+        cur.execute("""UPDATE users SET mess_count = mess_count + 1 WHERE id = %s""", (user_id,))
         mysql.connection.commit()
 
-        # Count total users attended for this meal today
+        # Increment temporary live counter
+        live_counts[meal_type] += 1  
+
+        # Get updated count from DB
         cur.execute("""
             SELECT COUNT(*) AS count FROM meal_attendance
             WHERE meal_type=%s AND attendance_date=%s
         """, (meal_type, today))
         result = cur.fetchone()
 
-        # Get user details
-        cur.execute("SELECT name, email, course, mess_count FROM users WHERE id=%s", (user_id,))
+        cur.execute("SELECT name, course, mess_count FROM users WHERE id=%s", (user_id,))
         user = cur.fetchone()
         cur.close()
-
-        if not user:
-            return jsonify({'success': False, 'message': 'User not found'}), 404
 
         return jsonify({
             'success': True,
             'name': user['name'],
-            'email': user['email'],
             'course': user['course'],
-            'count': result['count'],   # ✅ total meal attendance today
-            'mess_count': user['mess_count']  # ✅ persistent total
+            'mess_count': user['mess_count'],
+            'count': result['count'],
+            'live_count': live_counts[meal_type]  # 🔹 return live count
         })
 
     except MySQLdb.Error as e:
@@ -857,30 +862,29 @@ def qr_scan_counts():
 # Temporary live counters (resettable anytime)
 live_counts = {"breakfast": 0, "lunch": 0, "dinner": 0}
 
-@app.route("/admin/live_count/<meal>")
+# ✅ Get live count
+@app.route('/admin/live_count/<meal_type>')
 @login_required
-def get_live_count(meal):
-    if not getattr(current_user, "is_admin", False):
-        return jsonify({"success": False, "message": "Unauthorized"}), 403
-    if meal not in live_counts:
-        return jsonify({"success": False, "message": "Invalid meal"}), 400
-    return jsonify({"success": True, "count": live_counts[meal]})
+def get_live_count(meal_type):
+    if not getattr(current_user, 'is_admin', False):
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    return jsonify({'success': True, 'count': live_counts.get(meal_type, 0)})
 
-@app.route("/admin/reset_live_count", methods=["POST"])
+# ✅ Reset live count manually (no save)
+@app.route('/admin/reset_live_count', methods=['POST'])
 @login_required
 def reset_live_count():
-    if not getattr(current_user, "is_admin", False):
-        return jsonify({"success": False, "message": "Unauthorized"}), 403
+    if not getattr(current_user, 'is_admin', False):
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    data = request.get_json(silent=True) or {}
-    meal = data.get("meal_type")
-    if meal not in live_counts:
-        return jsonify({"success": False, "message": "Invalid meal"}), 400
+    data = request.get_json()
+    meal_type = data.get('meal_type')
 
-    live_counts[meal] = 0
-    return jsonify({"success": True, "meal_type": meal, "message": "Live count reset"})
+    if meal_type not in live_counts:
+        return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
 
-
+    live_counts[meal_type] = 0
+    return jsonify({'success': True, 'meal_type': meal_type, 'count': 0})
 
 
 @app.route('/admin/live_count/<meal_type>')
@@ -902,50 +906,37 @@ def live_count(meal_type):
 
 
 
+# ✅ Add Count (persist to another table and reset live count)
 @app.route('/admin/add_count', methods=['POST'])
 @login_required
 def add_count():
-    if not current_user.is_admin:
+    if not getattr(current_user, 'is_admin', False):
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
     data = request.get_json()
     meal_type = data.get('meal_type')
     today = date.today()
 
-    if meal_type not in ["breakfast", "lunch", "dinner"]:
-        return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
+    count = live_counts.get(meal_type, 0)
+    if count == 0:
+        return jsonify({'success': False, 'message': 'No live count to save'}), 400
 
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    try:
+        cur = mysql.connection.cursor()
+        # Save into confirmed counts table
+        cur.execute("""
+            INSERT INTO confirmed_meal_counts (count_date, meal_type, total_people)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE total_people = total_people + VALUES(total_people)
+        """, (today, meal_type, count))
+        mysql.connection.commit()
+        cur.close()
 
-    # Count attendance
-    cur.execute("""
-        SELECT COUNT(*) AS total FROM meal_attendance
-        WHERE meal_type=%s AND attendance_date=%s
-    """, (meal_type, today))
-    result = cur.fetchone()
-    total = result['total']
+        live_counts[meal_type] = 0  # reset after saving
+        return jsonify({'success': True, 'meal_type': meal_type, 'total_people': count, 'count_date': str(today)})
+    except MySQLdb.Error as e:
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
 
-    # Insert confirmed count
-    cur.execute("""
-        INSERT INTO mess_counts (count_date, meal_type, total_people)
-        VALUES (%s, %s, %s)
-    """, (today, meal_type, total))
-
-    # Reset live count = delete today's scans for that meal
-    cur.execute("""
-        DELETE FROM meal_attendance
-        WHERE meal_type=%s AND attendance_date=%s
-    """, (meal_type, today))
-
-    mysql.connection.commit()
-    cur.close()
-
-    return jsonify({
-        'success': True,
-        'count_date': str(today),
-        'meal_type': meal_type,
-        'total_people': total
-    })
 
 
 
@@ -958,10 +949,10 @@ def admin_qr_counts():
 
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-    # ✅ Fetch all saved counts (from mess_counts table)
+    # ✅ Fetch all saved counts (from confirmed_meal_counts)
     cur.execute("""
         SELECT count_date, meal_type, total_people
-        FROM mess_counts
+        FROM confirmed_meal_counts
         ORDER BY count_date ASC
     """)
     rows = cur.fetchall()
@@ -975,11 +966,8 @@ def admin_qr_counts():
             counts_by_date[d] = {}
         counts_by_date[d][row["meal_type"]] = row["total_people"]
 
-    # ✅ Always return something safe (even if no data)
-    if not counts_by_date:
-        counts_by_date = {}
-
     return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
+
 
 @app.route('/admin/users_meal_counts')
 @login_required

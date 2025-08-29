@@ -2,7 +2,7 @@
 {% block content %}
 <div class="container mt-4">
   <h2>📊 Mess Attendance Counts</h2>
-  <p>Shows confirmed totals (after clicking “Add Count” in scanner page).</p>
+  <p>Confirmed totals (after clicking “Add Count” in QR scanner page).</p>
   <hr>
 
   <table class="table table-bordered table-striped text-center">
@@ -25,35 +25,5 @@
       {% endfor %}
     </tbody>
   </table>
-
-  <!-- Optional Chart -->
-  <canvas id="mealChart"></canvas>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  const labels = {{ counts_by_date.keys()|list|tojson }};
-  const breakfastData = {{ [meals.get('breakfast', 0) for meals in counts_by_date.values()]|tojson }};
-  const lunchData = {{ [meals.get('lunch', 0) for meals in counts_by_date.values()]|tojson }};
-  const dinnerData = {{ [meals.get('dinner', 0) for meals in counts_by_date.values()]|tojson }};
-
-  new Chart(document.getElementById('mealChart'), {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [
-        { label: 'Breakfast', data: breakfastData, borderColor: '#36A2EB', fill: false },
-        { label: 'Lunch', data: lunchData, borderColor: '#FFCE56', fill: false },
-        { label: 'Dinner', data: dinnerData, borderColor: '#FF6384', fill: false }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: 'top' },
-        title: { display: true, text: "Daily Meal Attendance" }
-      }
-    }
-  });
-</script>
 {% endblock %}
