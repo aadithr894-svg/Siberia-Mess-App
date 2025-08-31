@@ -18,23 +18,21 @@
         </thead>
         <tbody>
             {% for req in late_mess_requests %}
-            <tr>
+            <tr id="row-{{ req.id }}">
                 <td>{{ req.name }}</td>
                 <td>{{ req.email }}</td>
                 <td>{{ req.date_requested }}</td>
                 <td>{{ req.reason or 'N/A' }}</td>
-                <td>
+                <td id="status-{{ req.id }}">
                     {% if req.approved %}
                         <span class="badge bg-success">Approved</span>
                     {% else %}
                         <span class="badge bg-warning">Pending</span>
                     {% endif %}
                 </td>
-                <td>
+                <td id="action-{{ req.id }}">
                     {% if not req.approved %}
-                    <form action="{{ url_for('approve_late', late_mess_id=req.id) }}" method="POST" style="display:inline;">
-                        <button type="submit" class="btn btn-success btn-sm">Approve</button>
-                    </form>
+                        <button class="btn btn-success btn-sm" onclick="approveLate({{ req.id }})">Approve</button>
                     {% endif %}
                 </td>
             </tr>
@@ -47,4 +45,18 @@
     </div>
     {% endif %}
 </div>
+
+<!-- JQuery CDN -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+function approveLate(id) {
+    $.post("/admin/approve_late/" + id, function() {
+        // Update status and remove action button
+        $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
+        $("#action-" + id).html('');
+    }).fail(function() {
+        alert("Error approving late mess!");
+    });
+}
+</script>
 {% endblock %}

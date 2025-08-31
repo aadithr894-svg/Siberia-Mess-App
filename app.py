@@ -650,18 +650,15 @@ def mess_cut_list():
 
 
 # -------- USER: REQUEST LATE MESS --------
-from flask import flash, redirect, url_for, render_template, request
+from datetime import datetime, time, date
+from flask import flash, redirect, url_for, render_template
 from flask_login import login_required, current_user
-from datetime import datetime, date, time
-import pytz
 import MySQLdb.cursors
 
 @app.route('/request_late_mess', methods=['GET', 'POST'])
 @login_required
 def request_late_mess():
-    # Set timezone to IST
-    tz = pytz.timezone('Asia/Kolkata')
-    now = datetime.now(tz)
+    now = datetime.now()
     now_time = now.time()
     today = now.date()
 
@@ -674,42 +671,31 @@ def request_late_mess():
     if request.method == 'POST':
         # Check time window
         if not (start_time <= now_time <= end_time):
-            flash("Late mess can only be requested between 4:00 PM and 8:30 PM IST", "warning")
+            flash("Late mess can only be requested between 4:00 PM and 8:30 PM", "warning")
             return redirect(url_for('request_late_mess'))
 
-        try:
-            # Check if already requested today
-            cur.execute("SELECT * FROM late_mess WHERE user_id=%s AND date_requested=%s", 
-                        (current_user.id, today))
-            existing = cur.fetchone()
-            if existing:
-                flash("You have already requested late mess today.", "info")
-            else:
-                # Insert new request as approved immediately
-                cur.execute("""
-                    INSERT INTO late_mess(user_id, date_requested, status, approved)
-                    VALUES (%s, %s, %s, %s)
-                """, (current_user.id, today, "requested", 1))  # approved=1
-                mysql.connection.commit()
-                flash("Late mess requested successfully and automatically approved!", "success")
-        except Exception as e:
-            flash(f"Error: {str(e)}", "danger")
-        finally:
-            cur.close()
+        # Check if already requested today
+        cur.execute("SELECT * FROM late_mess WHERE user_id=%s AND date_requested=%s",
+                    (current_user.id, today))
+        existing = cur.fetchone()
+        if existing:
+            flash("You have already requested late mess today.", "info")
+        else:
+            # Insert new request with correct ENUM value
+            cur.execute("""
+                INSERT INTO late_mess(user_id, date_requested, status)
+                VALUES (%s, %s, %s)
+            """, (current_user.id, today, "pending"))  # ✅ use lowercase 'pending'
+            mysql.connection.commit()
+            flash("Late mess requested successfully!", "success")
+        cur.close()
         return redirect(url_for('request_late_mess'))
 
     # GET request: fetch previous requests
-    cur.execute("""
-        SELECT lm.*, u.name 
-        FROM late_mess lm 
-        JOIN users u ON u.id = lm.user_id
-        WHERE lm.user_id=%s
-        ORDER BY lm.date_requested DESC
-    """, (current_user.id,))
+    cur.execute("SELECT * FROM late_mess WHERE user_id=%s ORDER BY date_requested DESC", (current_user.id,))
     late_requests = cur.fetchall()
     cur.close()
 
-    # Determine if button should be active
     can_request = start_time <= now_time <= end_time
 
     return render_template(
@@ -1125,16 +1111,18 @@ def admin_validate_qr():
 
 
 # -------- ADMIN: LATE MESS LIST --------
+# -------- ADMIN: LATE MESS LIST --------
+# -------- ADMIN: LATE MESS LIST --------
 @app.route('/admin/late_mess_list')
 @login_required
 def late_mess_list():
-    if not getattr(current_user, 'is_admin', False):
+    if not current_user.is_admin:
         flash("Unauthorized access!", "danger")
         return redirect(url_for('admin_dashboard'))
 
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cur.execute("""
-        SELECT lm.id, u.name, u.email, lm.date_requested, lm.reason, lm.approved
+        SELECT lm.id, u.name, u.email, lm.date_requested, lm.reason, lm.status
         FROM late_mess lm
         JOIN users u ON u.id = lm.user_id
         ORDER BY lm.date_requested DESC
@@ -1143,8 +1131,6 @@ def late_mess_list():
     cur.close()
 
     return render_template('admin_late_mess.html', late_mess_requests=late_mess_requests)
-
-
 
 
 
@@ -1176,21 +1162,23 @@ def reset_late_mess():
 
 from flask import jsonify
 
-# Approve Late Mess
+# -------- ADMIN: APPROVE LATE MESS --------
+# -------- ADMIN: APPROVE LATE MESS --------
 @app.route('/admin/approve_late/<int:late_mess_id>', methods=['POST'])
 @login_required
 def approve_late(late_mess_id):
     if not current_user.is_admin:
-        return jsonify({"success": False, "message": "Unauthorized"}), 403
+        return "", 403  # Unauthorized
 
     try:
         cur = mysql.connection.cursor()
-        cur.execute("UPDATE late_mess SET approved=1 WHERE id=%s", (late_mess_id,))
+        # Update status column to 'approved'
+        cur.execute("UPDATE late_mess SET status='approved' WHERE id=%s", (late_mess_id,))
         mysql.connection.commit()
         cur.close()
-        return jsonify({"success": True, "message": "Late mess approved"})
+        return "", 204  # Success, no content
     except Exception as e:
-        return jsonify({"success": False, "message": f"Error approving late mess: {str(e)}"}), 500
+        return "", 500
 
 
 @app.route('/admin/approve_bulk', methods=['POST'])
