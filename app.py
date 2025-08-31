@@ -238,76 +238,62 @@ from flask_login import login_required, current_user
 @app.route('/approve_user/<int:user_id>')
 @login_required
 def approve_user(user_id):
-    if not current_user.is_admin:   # ensure only admin can approve
+    if not current_user.is_admin:
         flash("❌ Unauthorized", "danger")
         return redirect(url_for('user_dashboard'))
 
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
     try:
-        # 1. Fetch user details from new_users
-        cur.execute("SELECT * FROM new_users WHERE id = %s", (user_id,))
+        # 1. Fetch from new_users
+        cur.execute("SELECT * FROM new_users WHERE id=%s", (user_id,))
         user = cur.fetchone()
-
         if not user:
             flash("⚠️ User not found!", "warning")
             return redirect(url_for('new_users_list'))
 
         # 2. Prevent duplicate email
-        cur.execute("SELECT id FROM users WHERE email = %s", (user['email'],))
+        cur.execute("SELECT id FROM users WHERE email=%s", (user['email'],))
         if cur.fetchone():
             flash("⚠️ A user with this email already exists!", "danger")
             return redirect(url_for('new_users_list'))
 
-        # 3. Insert into users (qr_path left empty initially)
+        # 3. Insert into users
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved, qr_path)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            user['name'], user['email'], user['phone'], user['course'],
-            user['password'], user['user_type'], 1, ""
-        ))
-
+            VALUES (%s,%s,%s,%s,%s,%s,1,'')
+        """, (user['name'], user['email'], user['phone'], user['course'], user['password'], user['user_type']))
         new_user_id = cur.lastrowid
 
-        # 4. Generate QR Code
-        qr_data = f"ID:{new_user_id}|Name:{user['name']}|Email:{user['email']}|Type:{user['user_type']}"
+        # 4. Generate QR based on ID
+        qr_data = f"user_id:{new_user_id}"  # ✅ ID based QR
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
         qr.add_data(qr_data)
         qr.make(fit=True)
         img = qr.make_image(fill_color='black', back_color='white')
 
-        # Save QR code in static/qrcodes/
         qr_folder = os.path.join("static", "qrcodes")
         os.makedirs(qr_folder, exist_ok=True)
         qr_filename = f"user_{new_user_id}.png"
         qr_path = os.path.join(qr_folder, qr_filename)
         img.save(qr_path)
 
-        # Store relative path so template can use {{ url_for('static', filename='qrcodes/xxx.png') }}
+        # 5. Update users table with QR path
         db_qr_path = f"qrcodes/{qr_filename}"
-
-        # 5. Update QR path in users table
-        cur.execute("UPDATE users SET qr_path = %s WHERE id = %s", (db_qr_path, new_user_id))
+        cur.execute("UPDATE users SET qr_path=%s WHERE id=%s", (db_qr_path, new_user_id))
 
         # 6. Delete from new_users
         cur.execute("DELETE FROM new_users WHERE id=%s", (user_id,))
 
-        # ✅ Commit once after all queries
         mysql.connection.commit()
-
         flash("✅ User approved successfully and QR code generated.", "success")
 
     except Exception as e:
         mysql.connection.rollback()
         flash(f"❌ Error approving user: {str(e)}", "danger")
-        print("Approve user error:", e)  # debug log
-
     finally:
         cur.close()
 
     return redirect(url_for('new_users_list'))
-
 
 
 
@@ -718,11 +704,14 @@ def request_late_mess():
 
 
 # -------- USER: GENERATE QR --------
+# -------- USER: GENERATE QR (by user ID) --------
 @app.route('/my_qr')
 @login_required
 def my_qr():
-    # Encode the user's email
-    qr_data = f"email:{current_user.email}"
+    """
+    Generates a QR code based on the user's ID instead of email.
+    """
+    qr_data = f"user_id:{current_user.id}"  # ✅ Use ID
 
     # Generate QR
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
@@ -752,7 +741,8 @@ from datetime import date, datetime
 def admin_qr_scan():
     if not getattr(current_user, 'is_admin', False):
         return "Unauthorized", 403
-    return render_template('admin_qr_scan.html', current_date=datetime.now().date())
+    return render_template('admin_qr_scan.html', current_date=date.today().strftime("%Y-%m-%d"))
+
 
 
 
@@ -778,13 +768,14 @@ live_counts = {
 
 def parse_qr_data(qr_data):
     """
-    Parse format: "email:someone@example.com"
+    Parse QR data format: "user_id:{id}"
     """
     try:
-        email = qr_data.split("email:")[1]
-        return {"email": email}
-    except Exception as e:
+        user_id = int(qr_data.split("user_id:")[1])
+        return {"user_id": user_id}
+    except Exception:
         return None
+
 
 
 @app.route('/admin/scan_qr', methods=['POST'])
