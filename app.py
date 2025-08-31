@@ -721,26 +721,33 @@ def request_late_mess():
 @app.route('/my_qr')
 @login_required
 def my_qr():
-    # Fetch current mess count from DB
+    import json
+
+    # Fetch current mess count
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT mess_count FROM users WHERE id=%s", (current_user.id,))
     data = cursor.fetchone()
     mess_count = data['mess_count'] if data else 0
     cursor.close()
 
-    # QR data
-    qr_data = f"user_id:{current_user.id},email:{current_user.email},mess_count:{mess_count}"
-    
+    # QR data as JSON
+    qr_data = json.dumps({
+        "user_id": current_user.id,
+        "email": current_user.email,
+        "mess_count": mess_count
+    })
+
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(qr_data)
     qr.make(fit=True)
     img = qr.make_image(fill='black', back_color='white')
-    
+
     # Send as image
     img_bytes = io.BytesIO()
     img.save(img_bytes, format='PNG')
     img_bytes.seek(0)
     return send_file(img_bytes, mimetype='image/png')
+
 
 # -------- ADMIN: SCAN QR AND INCREMENT MESS COUNT --------
 from flask import Flask, render_template, request, jsonify
@@ -778,21 +785,29 @@ live_counts = {
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
 def scan_qr():
-    if not current_user.is_admin:
+    if not getattr(current_user, 'is_admin', False):
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
+    import json
     data = request.get_json()
-    user_id = data.get('user_id')
+    qr_data = data.get('qr_data')
     meal_type = data.get('meal_type')
-    today = date.today()
 
-    if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
+    if not qr_data or meal_type not in ['breakfast', 'lunch', 'dinner']:
         return jsonify({'success': False, 'message': 'Invalid data'}), 400
+
+    try:
+        qr_json = json.loads(qr_data)
+        user_id = int(qr_json.get('user_id'))
+    except Exception as e:
+        return jsonify({'success': False, 'message': 'Invalid QR code format'}), 400
+
+    today = date.today()
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Insert attendance (ignore duplicate)
+        # Insert attendance (ignore duplicates)
         cur.execute("""
             INSERT IGNORE INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
@@ -803,21 +818,19 @@ def scan_qr():
         cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id=%s", (user_id,))
         mysql.connection.commit()
 
-        # Count total for this meal today
+        # Get user name and today's count
         cur.execute("""
-            SELECT COUNT(*) AS count FROM meal_attendance
-            WHERE meal_type=%s AND attendance_date=%s
-        """, (meal_type, today))
+            SELECT u.name, 
+                   (SELECT COUNT(*) FROM meal_attendance 
+                    WHERE user_id=%s AND meal_type=%s AND attendance_date=%s) AS count
+        """, (user_id, meal_type, today))
         result = cur.fetchone()
-
-        # Get user name
-        cur.execute("SELECT name FROM users WHERE id=%s", (user_id,))
-        user = cur.fetchone()
         cur.close()
 
-        return jsonify({'success': True, 'name': user['name'], 'count': result['count']})
+        return jsonify({'success': True, 'name': result['name'], 'count': result['count']})
     except MySQLdb.Error as e:
         return jsonify({'success': False, 'message': str(e)})
+
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
