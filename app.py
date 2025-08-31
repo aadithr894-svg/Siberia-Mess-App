@@ -650,49 +650,57 @@ def mess_cut_list():
 
 
 # -------- USER: REQUEST LATE MESS --------
-from datetime import datetime, time, date
-from flask import flash, redirect, url_for, render_template
+
+from datetime import datetime, time
+import pytz
+from flask import flash, redirect, url_for, render_template, request
 from flask_login import login_required, current_user
-import MySQLdb.cursors
 
 @app.route('/request_late_mess', methods=['GET', 'POST'])
 @login_required
 def request_late_mess():
-    now = datetime.now()
+    # Use IST timezone
+    tz = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(tz)
     now_time = now.time()
     today = now.date()
 
-    # Allowed time window: 4:00 PM - 8:30 PM
-    start_time = time(16, 0)
-    end_time = time(20, 30)
+    # Allowed time window: 4:00 PM - 8:30 PM IST
+    start_time = time(16, 0)  # 16:00
+    end_time = time(20, 30)   # 20:30
 
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     if request.method == 'POST':
-        # Check time window
+        # Check if current time is within allowed window
         if not (start_time <= now_time <= end_time):
-            flash("Late mess can only be requested between 4:00 PM and 8:30 PM", "warning")
+            flash("Late mess can only be requested between 4:00 PM and 8:30 PM IST", "warning")
             return redirect(url_for('request_late_mess'))
 
-        # Check if already requested today
-        cur.execute("SELECT * FROM late_mess WHERE user_id=%s AND date_requested=%s",
-                    (current_user.id, today))
+        # Check if the user already requested today
+        cur.execute(
+            "SELECT * FROM late_mess WHERE user_id=%s AND date_requested=%s",
+            (current_user.id, today)
+        )
         existing = cur.fetchone()
         if existing:
             flash("You have already requested late mess today.", "info")
         else:
-            # Insert new request with correct ENUM value
             cur.execute("""
                 INSERT INTO late_mess(user_id, date_requested, status)
                 VALUES (%s, %s, %s)
-            """, (current_user.id, today, "pending"))  # ✅ use lowercase 'pending'
+            """, (current_user.id, today, "pending"))
             mysql.connection.commit()
             flash("Late mess requested successfully!", "success")
+
         cur.close()
         return redirect(url_for('request_late_mess'))
 
     # GET request: fetch previous requests
-    cur.execute("SELECT * FROM late_mess WHERE user_id=%s ORDER BY date_requested DESC", (current_user.id,))
+    cur.execute(
+        "SELECT * FROM late_mess WHERE user_id=%s ORDER BY date_requested DESC",
+        (current_user.id,)
+    )
     late_requests = cur.fetchall()
     cur.close()
 
@@ -706,6 +714,7 @@ def request_late_mess():
         start_time=start_time.strftime("%H:%M"),
         end_time=end_time.strftime("%H:%M")
     )
+
 
 
 # -------- USER: GENERATE QR --------
