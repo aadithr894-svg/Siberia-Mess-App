@@ -848,7 +848,7 @@ def qr_scan_counts():
     counts_by_date = {}
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cur.execute("SELECT date, breakfast, lunch, dinner FROM confirmed_meal_counts ORDER BY date DESC")
+        cur.execute("SELECT count_date, breakfast, lunch, dinner FROM confirmed_meal_counts ORDER BY created_date DESC")
         rows = cur.fetchall()
         cur.close()
 
