@@ -845,32 +845,24 @@ def scan_qr():
 @app.route('/admin/qr_scan_counts')
 @login_required
 def qr_scan_counts():
-    cursor = mysql.connection.cursor()
-    cursor.execute("""
-        SELECT DATE(scan_time) as date, meal_type, COUNT(*) as count
-        FROM daily_meal_attendance
-        GROUP BY DATE(scan_time), meal_type
-        ORDER BY date ASC
-    """)
-    rows = cursor.fetchall()
-    cursor.close()
-
     counts_by_date = {}
-    for row in rows:
-        date = str(row['date'])
-        meal_type = row['meal_type']
-        count = row['count']
-        if date not in counts_by_date:
-            counts_by_date[date] = {}
-        counts_by_date[date][meal_type] = count
+    try:
+        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cur.execute("SELECT date, breakfast, lunch, dinner FROM meal_counts ORDER BY date DESC")
+        rows = cur.fetchall()
+        cur.close()
 
-    print("DEBUG counts_by_date =", counts_by_date)  # 👈 check logs on Render
-
-    return render_template(
-        "admin_qr_count.html",
-        counts_by_date=counts_by_date
-    )
-
+        for row in rows:
+            date_str = row['date'].strftime("%Y-%m-%d")
+            counts_by_date[date_str] = {
+                'breakfast': row.get('breakfast', 0),
+                'lunch': row.get('lunch', 0),
+                'dinner': row.get('dinner', 0)
+            }
+    except Exception as e:
+        flash(f"Error fetching counts: {e}", "danger")
+    
+    return render_template("admin_meal_count.html", counts_by_date=counts_by_date)
 
 
 
