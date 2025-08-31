@@ -1,59 +1,69 @@
+from locust import HttpUser, TaskSet, task, between
+from datetime import datetime, timedelta
 import random
-from locust import HttpUser, task, between
+import string
 
-names = ["Alice", "Bob", "Charlie", "David", "Eve"]
-courses = ["DCS", "SMS", "BCA", "MCA", "EEE"]
+# ---------------- HELPER FUNCTIONS ----------------
+def random_string(length=6):
+    return ''.join(random.choices(string.ascii_letters, k=length))
 
-class MessAppUser(HttpUser):
-    wait_time = between(1, 3)
+def random_email():
+    return f"{random_string(6)}@example.com"
+
+# ---------------- TASKS ----------------
+class UserBehavior(TaskSet):
 
     def on_start(self):
-        # Unique email per Locust instance
-        self.email = f"user{random.randint(10000,99999)}@test.com"
-        self.password = "Password123"
+        # Login as admin once per Locust user to approve
+        self.admin_email = "siberiamess4@gmail.com"
+        self.admin_password = "siberia@123"
+        self.login_admin()
 
-        # 1️⃣ Register
-        reg_data = {
-            "name": random.choice(names),
-            "email": self.email,
-            "course": random.choice(courses),
-            "phone": f"{random.randint(6000000000, 9999999999)}",
-            "password": self.password,
-            "user_type": "student"
-        }
-        self.client.post("/register", data=reg_data, allow_redirects=True)
-
-        # 2️⃣ Login as admin to approve the new user
-        admin_login = {"email": "siberiamess4@gmail.com", "password": "siberia@123"}
-        self.client.post("/login", data=admin_login, allow_redirects=True)
-
-        # Approve the newly registered user
-        self.client.post("/admin/approve_bulk", json={"emails": [self.email]}, allow_redirects=True)
-
-        # Logout admin
-        self.client.get("/logout", allow_redirects=True)
-
-        # 3️⃣ Login as student
-        student_login = {"email": self.email, "password": self.password}
-        self.client.post("/login", data=student_login, allow_redirects=True)
-
-        # Flag for running mess cut only once
-        self.mess_cut_done = False
+    def login_admin(self):
+        self.client.post("/login", data={
+            "email": self.admin_email,
+            "password": self.admin_password
+        })
 
     @task
-    def apply_mess_cut_once(self):
-        if self.mess_cut_done:
-            return
+    def register_approve_mess_cut(self):
+        # 1️⃣ Register new user
+        name = random_string()
+        email = random_email()
+        phone = ''.join(random.choices(string.digits, k=10))
+        course = random.choice(["DCS", "SMS", "Other"])
+        password = "user123"
+        user_type = "outmess"
 
-        from datetime import date, timedelta
-        today = date.today()
-        start = today + timedelta(days=2)
-        end = start + timedelta(days=3)
+        self.client.post("/register", data={
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "course": course,
+            "password": password,
+            "user_type": user_type
+        })
 
-        cut_data = {
-            "start_date": start.isoformat(),
-            "end_date": end.isoformat()
-        }
+        # 2️⃣ Approve user
+        # Using API: fetch new_users list
+        resp = self.client.get("/new_users")
+        import re
+        match = re.search(r'/approve_user/(\d+)"[^>]*>' + re.escape(email), resp.text)
+        if match:
+            user_id = match.group(1)
+            self.client.get(f"/approve_user/{user_id}")
 
-        self.client.post("/apply_mess_cut", data=cut_data, allow_redirects=True)
-        self.mess_cut_done = True
+            # 3️⃣ Apply random mess cut (min 3 days)
+            today = datetime.now().date()
+            start_date = today + timedelta(days=random.randint(1, 5))
+            end_date = start_date + timedelta(days=random.randint(3, 7))
+
+            self.client.post("/apply_mess_cut", data={
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat()
+            })
+
+# ---------------- LOCUST USER ----------------
+class WebsiteUser(HttpUser):
+    tasks = [UserBehavior]
+    wait_time = between(1, 3)  # seconds between tasks
