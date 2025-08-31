@@ -26,9 +26,19 @@
             flex-wrap: wrap;
         }
         nav .logo {
+            display: flex;
+            align-items: center;
             font-size: 22px;
             font-weight: bold;
             letter-spacing: 1px;
+        }
+        nav .logo img {
+            height: 40px;
+            width: 40px;
+            margin-right: 10px;
+            border-radius: 50%; /* ensures circular shape */
+            object-fit: cover;  /* keeps aspect ratio inside circle */
+            border: 2px solid white; /* optional nice border */
         }
         nav .nav-links {
             display: flex;
@@ -117,7 +127,10 @@
 </head>
 <body>
     <nav>
-        <div class="logo">🍽 Siberia Mess</div>
+        <div class="logo">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Siberia Mess Logo">
+            Siberia Mess
+        </div>
         <div class="nav-links">
             {% if current_user.is_authenticated %}
                 {% if current_user.is_admin %}
