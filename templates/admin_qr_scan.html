@@ -13,12 +13,14 @@
       align-items: center;
       min-height: 100vh;
     }
+
     h2 {
       margin: 30px 0 15px 0;
       color: #1a1a1a;
       font-size: 2em;
       text-shadow: 1px 1px 2px #ccc;
     }
+
     #scanner-card {
       max-width: 500px;
       width: 90%;
@@ -31,7 +33,9 @@
       overflow: hidden;
       transition: transform 0.3s;
     }
+
     #scanner-card:hover { transform: translateY(-5px); }
+
     #reader {
       width: 100%;
       max-width: 400px;
@@ -41,14 +45,11 @@
       padding: 10px;
       background: #f0f7f5;
     }
-    #result {
-      margin-top: 15px;
-      font-size: 1.2em;
-      font-weight: bold;
-      min-height: 1.5em;
-    }
+
+    #result { margin-top: 15px; font-size: 1.2em; font-weight: bold; min-height: 1.5em; }
     .success { color: #4caf50; }
     .error { color: #f44336; }
+
     .count-box {
       margin-top: 20px;
       font-size: 1.1em;
@@ -58,6 +59,7 @@
       display: inline-block;
       box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
     }
+
     button {
       margin: 12px 8px 0 8px;
       padding: 12px 25px;
@@ -68,131 +70,158 @@
       font-weight: bold;
       transition: transform 0.2s, box-shadow 0.2s;
     }
+
     button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
     .btn-success { background: #4caf50; color: white; }
     .btn-danger { background: #f44336; color: white; }
   </style>
 </head>
 <body>
-  <h2>📡 Admin QR Scanner</h2>
+<h2>📡 Admin QR Scanner</h2>
 
-  <div id="scanner-card">
-    <div id="reader"></div>
-    <div id="result">Scan a QR code to record attendance.</div>
-    <div class="count-box">
-      🍽️ Live Count (<span id="mealType"></span>): 
-      <span id="liveCount">0</span>
-    </div>
-    <br>
-    <button id="addCountBtn" class="btn-success">➕ Add Count</button>
-    <button id="resetCountBtn" class="btn-danger">🔄 Reset</button>
+<div id="scanner-card">
+  <div id="reader"></div>
+  <div id="result">Scan a QR code to record attendance.</div>
+  <div class="count-box">
+    🍽️ Live Count (<span id="mealType"></span>): 
+    <span id="liveCount">0</span>
   </div>
+  <br>
+  <button id="addCountBtn" class="btn-success">➕ Add Count</button>
+  <button id="resetCountBtn" class="btn-danger">🔄 Reset</button>
+</div>
 
-  <script>
-    const resultDiv = document.getElementById("result");
-    const liveCount = document.getElementById("liveCount");
-    const mealTypeSpan = document.getElementById("mealType");
-    let lastScanTime = 0;
+<script>
+const resultDiv = document.getElementById("result");
+const liveCount = document.getElementById("liveCount");
+const mealTypeSpan = document.getElementById("mealType");
+let lastScanTime = 0;
 
-    function detectMeal() {
-      const now = new Date();
-      const hours = now.getHours() + now.getMinutes()/60;
-      if (hours >= 7.5 && hours <= 9) return 'Breakfast';
-      if (hours >= 12 && hours <= 14) return 'Lunch';
-      if (hours >= 19.5 && hours <= 21) return 'Dinner';
-      return 'Closed';
+// Detect current meal and match backend expected string
+function detectMeal() {
+  const now = new Date();
+  const hours = now.getHours() + now.getMinutes()/60;
+
+  if (hours >= 7.5 && hours < 9.01) return 'breakfast';
+  if (hours >= 12 && hours < 14.01) return 'lunch';
+  if (hours >= 19.5 && hours < 21.01) return 'dinner';
+  return null;
+}
+
+// Update live count every 3s
+function updateLiveCount() {
+  const meal = detectMeal();
+  if (!meal) {
+    mealTypeSpan.innerText = 'Closed';
+    liveCount.innerText = '0';
+    return;
+  }
+  mealTypeSpan.innerText = meal.charAt(0).toUpperCase() + meal.slice(1);
+  fetch(`/admin/live_count/${meal}`)
+    .then(res => res.json())
+    .then(data => { if (data.success) liveCount.innerText = data.count; });
+}
+setInterval(updateLiveCount, 3000);
+updateLiveCount();
+
+// QR scan handler
+function onScanSuccess(decodedText) {
+  const now = Date.now();
+  if (now - lastScanTime < 2000) return;
+  lastScanTime = now;
+
+  const meal = detectMeal();
+  if (!meal) {
+    resultDiv.innerText = "❌ Not meal time!";
+    resultDiv.className = "error";
+    return;
+  }
+
+  let user_id = null;
+  let mess_cut = false;
+  try {
+    const parts = decodedText.split(",");
+    for (let p of parts) {
+      if (p.startsWith("user_id:")) user_id = p.split(":")[1];
+      if (p.startsWith("mess_cut:") && p.split(":")[1] === "true") mess_cut = true;
     }
+  } catch (e) {}
 
-    function updateLiveCount() {
-      const meal = detectMeal();
-      mealTypeSpan.innerText = meal;
-      if(meal === 'Closed') return;
-      fetch(`/admin/live_count/${meal}`)
-        .then(res => res.json())
-        .then(data => { if (data.success) liveCount.innerText = data.count; });
+  if (!user_id) {
+    resultDiv.innerText = "❌ Invalid QR code!";
+    resultDiv.className = "error";
+    return;
+  }
+
+  if (mess_cut) {
+    resultDiv.innerText = "❌ User on mess cut!";
+    resultDiv.className = "error";
+    return;
+  }
+
+  fetch("/admin/scan_qr", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id, meal_type: meal })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      resultDiv.innerText = `✅ ${data.name} marked for ${meal}`;
+      resultDiv.className = "success";
+      liveCount.innerText = data.count;
+    } else {
+      resultDiv.innerText = `❌ ${data.message}`;
+      resultDiv.className = "error";
     }
-    setInterval(updateLiveCount, 3000);
-    updateLiveCount();
+  })
+  .catch(() => {
+    resultDiv.innerText = "❌ Network error!";
+    resultDiv.className = "error";
+  });
+}
 
-    function onScanSuccess(decodedText) {
-      const now = Date.now();
-      if (now - lastScanTime < 1500) return; // debounce
-      lastScanTime = now;
+function onScanFailure(error) {}
 
-      const meal = detectMeal();
-      if(meal === 'Closed') {
-        resultDiv.innerText = "❌ Mess closed now!";
-        resultDiv.className = "error";
-        return;
-      }
+let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 
-      fetch("/admin/scan_qr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qr_data: decodedText, meal_type: meal })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if(data.success) {
-          if(data.on_cut) {
-            resultDiv.innerText = `⚠️ ${data.name} is on mess cut. Cannot mark attendance.`;
-            resultDiv.className = "error";
-            return;
-          }
-          resultDiv.innerText = `✅ ${data.name} marked for ${meal}`;
-          resultDiv.className = "success";
-          liveCount.innerText = data.mess_count || liveCount.innerText;
-        } else {
-          resultDiv.innerText = `❌ ${data.message}`;
-          resultDiv.className = "error";
-        }
-      })
-      .catch(() => {
-        resultDiv.innerText = "❌ Network error!";
-        resultDiv.className = "error";
-      });
-    }
+// Add / reset buttons
+document.getElementById("addCountBtn").addEventListener("click", () => {
+  const meal = detectMeal();
+  if (!meal) { alert("❌ Not meal time!"); return; }
+  fetch("/admin/add_count", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ meal_type: meal })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      alert(`✅ Saved: ${data.total_people} for ${meal} (${data.count_date})`);
+      updateLiveCount();
+    } else alert("❌ " + data.message);
+  });
+});
 
-    function onScanFailure(error) {}
-
-    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-
-    document.getElementById("addCountBtn").addEventListener("click", () => {
-      const meal = detectMeal();
-      if(meal === 'Closed') { alert("❌ Mess closed!"); return; }
-      fetch("/admin/add_count", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meal_type: meal })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          alert(`✅ Saved: ${data.total_people} for ${meal} (${data.count_date})`);
-          updateLiveCount();
-        } else { alert("❌ " + data.message); }
-      });
-    });
-
-    document.getElementById("resetCountBtn").addEventListener("click", () => {
-      const meal = detectMeal();
-      if(meal === 'Closed') { alert("❌ Mess closed!"); return; }
-      fetch("/admin/reset_count", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meal_type: meal })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          alert(`🔄 ${meal} reset successful!`);
-          liveCount.innerText = "0";
-          resultDiv.innerText = "✅ Ready for new scans.";
-          resultDiv.className = "success";
-        } else { alert("❌ " + data.message); }
-      });
-    });
-  </script>
+document.getElementById("resetCountBtn").addEventListener("click", () => {
+  const meal = detectMeal();
+  if (!meal) { alert("❌ Not meal time!"); return; }
+  fetch("/admin/reset_count", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ meal_type: meal })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      alert(`🔄 ${meal} reset successful!`);
+      liveCount.innerText = "0";
+      resultDiv.innerText = "✅ Ready for new scans.";
+      resultDiv.className = "success";
+    } else alert("❌ " + data.message);
+  });
+});
+</script>
 </body>
 </html>
