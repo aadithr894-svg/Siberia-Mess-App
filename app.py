@@ -1172,22 +1172,22 @@ def reset_late_mess():
 from flask import jsonify
 
 # -------- ADMIN: APPROVE LATE MESS --------
-# -------- ADMIN: APPROVE LATE MESS --------
 @app.route('/admin/approve_late/<int:late_mess_id>', methods=['POST'])
 @login_required
 def approve_late(late_mess_id):
     if not current_user.is_admin:
-        return "", 403  # Unauthorized
+        return "", 403
 
     try:
         cur = mysql.connection.cursor()
-        # Update status column to 'approved'
         cur.execute("UPDATE late_mess SET status='approved' WHERE id=%s", (late_mess_id,))
         mysql.connection.commit()
         cur.close()
-        return "", 204  # Success, no content
+        return "", 204
     except Exception as e:
         return "", 500
+
+
 
 
 @app.route('/admin/approve_bulk', methods=['POST'])

@@ -2,45 +2,43 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2 class="mb-3">Late Mess Requests</h2>
+    <h2>Late Mess Requests</h2>
 
     {% if late_mess_requests %}
-    <div class="table-responsive">
-        <table class="table table-bordered table-striped align-middle">
-            <thead class="table-primary">
-                <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Date Requested</th>
-                    <th>Reason</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for req in late_mess_requests %}
-                <tr id="row-{{ req.id }}">
-                    <td>{{ req.name }}</td>
-                    <td>{{ req.email }}</td>
-                    <td>{{ req.date_requested }}</td>
-                    <td>{{ req.reason or 'N/A' }}</td>
-                    <td id="status-{{ req.id }}">
-                        {% if req.approved %}
-                            <span class="badge bg-success">Approved</span>
-                        {% else %}
-                            <span class="badge bg-warning text-dark">Pending</span>
-                        {% endif %}
-                    </td>
-                    <td id="action-{{ req.id }}">
-                        {% if not req.approved %}
-                        <button class="btn btn-primary btn-sm rounded-pill px-3" onclick="approveLate({{ req.id }})">Approve</button>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <table class="table table-bordered mt-3">
+        <thead class="thead-light">
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Date Requested</th>
+                <th>Reason</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in late_mess_requests %}
+            <tr id="row-{{ req.id }}">
+                <td>{{ req.name }}</td>
+                <td>{{ req.email }}</td>
+                <td>{{ req.date_requested }}</td>
+                <td>{{ req.reason or 'N/A' }}</td>
+                <td id="status-{{ req.id }}">
+                    {% if req.status == 'approved' %}
+                        <span class="badge bg-success">Approved</span>
+                    {% else %}
+                        <span class="badge bg-warning">Pending</span>
+                    {% endif %}
+                </td>
+                <td id="action-{{ req.id }}">
+                    {% if req.status != 'approved' %}
+                        <button class="btn btn-success btn-sm" onclick="approveLate({{ req.id }})">Approve</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
     {% else %}
     <div class="alert alert-info mt-3">
         No late mess requests found.
@@ -48,16 +46,16 @@
     {% endif %}
 </div>
 
-<!-- JQuery CDN -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 function approveLate(id) {
-    $.post("/admin/approve_late/" + id, function() {
-        // Update status and remove action button
+    $.post("/admin/approve_late/" + id)
+    .done(function() {
         $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
         $("#action-" + id).html('');
-    }).fail(function() {
-        alert("Error approving late mess!");
+    })
+    .fail(function() {
+        alert("❌ Error approving late mess!");
     });
 }
 </script>
