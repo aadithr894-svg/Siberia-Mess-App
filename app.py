@@ -650,21 +650,21 @@ def mess_cut_list():
 
 
 # -------- USER: REQUEST LATE MESS --------
-from datetime import datetime, time
 from flask import flash, redirect, url_for, render_template, request
 from flask_login import login_required, current_user
+from datetime import datetime, date, time
+import pytz
 import MySQLdb.cursors
-
-from datetime import datetime, time
 
 @app.route('/request_late_mess', methods=['GET', 'POST'])
 @login_required
 def request_late_mess():
-    from datetime import datetime, time, date
-    now = datetime.now()
+    # Set timezone to IST
+    tz = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(tz)
     now_time = now.time()
     today = now.date()
-    
+
     # Allowed time window: 4:00 PM - 8:30 PM
     start_time = time(16, 0)
     end_time = time(20, 30)
@@ -674,7 +674,7 @@ def request_late_mess():
     if request.method == 'POST':
         # Check time window
         if not (start_time <= now_time <= end_time):
-            flash("Late mess can only be requested between 4:00 PM and 8:30 PM", "warning")
+            flash("Late mess can only be requested between 4:00 PM and 8:30 PM IST", "warning")
             return redirect(url_for('request_late_mess'))
 
         try:
@@ -685,13 +685,13 @@ def request_late_mess():
             if existing:
                 flash("You have already requested late mess today.", "info")
             else:
-                # Insert new request
+                # Insert new request as approved immediately
                 cur.execute("""
-                    INSERT INTO late_mess(user_id, date_requested, status)
-                    VALUES (%s, %s, %s)
-                """, (current_user.id, today, "pending"))
+                    INSERT INTO late_mess(user_id, date_requested, status, approved)
+                    VALUES (%s, %s, %s, %s)
+                """, (current_user.id, today, "requested", 1))  # approved=1
                 mysql.connection.commit()
-                flash("Late mess requested successfully!", "success")
+                flash("Late mess requested successfully and automatically approved!", "success")
         except Exception as e:
             flash(f"Error: {str(e)}", "danger")
         finally:
@@ -699,7 +699,13 @@ def request_late_mess():
         return redirect(url_for('request_late_mess'))
 
     # GET request: fetch previous requests
-    cur.execute("SELECT * FROM late_mess WHERE user_id=%s ORDER BY date_requested DESC", (current_user.id,))
+    cur.execute("""
+        SELECT lm.*, u.name 
+        FROM late_mess lm 
+        JOIN users u ON u.id = lm.user_id
+        WHERE lm.user_id=%s
+        ORDER BY lm.date_requested DESC
+    """, (current_user.id,))
     late_requests = cur.fetchall()
     cur.close()
 
