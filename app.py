@@ -375,7 +375,7 @@ def users_list():
 
 
 # -------- ADMIN: DELETE USER --------
-@app.route('/admin/delete_user/<int:user_id>')
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
 @login_required
 def delete_user(user_id):
     if not current_user.is_admin:
