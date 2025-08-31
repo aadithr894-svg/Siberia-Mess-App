@@ -16,59 +16,105 @@
         {% endif %}
     {% endwith %}
 
-    <!-- Responsive table wrapper -->
-    <div class="table-responsive">
-        <table class="table table-bordered table-striped table-hover align-middle">
-            <thead class="table-dark">
-                <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Course</th>
-                    <th>Phone</th>
-                    <th>Role</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for user in users %}
-                <tr>
-                    <td>{{ user.id }}</td>
-                    <td>{{ user.name }}</td>
-                    <td>{{ user.email }}</td>
-                    <td>{{ user.course }}</td>
-                    <td>{{ user.phone }}</td>
-                    <td>
-                        {% if user.user_type == 'outmess' %}
-                            <span class="badge bg-warning text-dark">Outmess</span>
-                        {% elif user.user_type == 'guest' %}
-                            <span class="badge bg-info text-dark">Guest</span>
-                        {% elif user.user_type == 'inmate' %}
-                            <span class="badge bg-success">Inmate</span>
-                        {% else %}
-                            <span class="badge bg-secondary">{{ user.user_type|capitalize }}</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post" 
-                              onsubmit="return confirm('Are you sure you want to delete this user?');">
-                            <button type="submit" class="btn btn-sm btn-danger w-100">Delete</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <!-- Search input -->
+    <div class="mb-4">
+        <input type="text" id="searchInput" class="form-control rounded-pill" placeholder="Search users...">
+    </div>
+
+    <!-- Responsive cards with extra spacing -->
+    <div id="usersList" class="row g-5"> <!-- increased gutter for more space -->
+        {% for user in users %}
+        <div class="col-12 col-md-6 col-lg-4 user-card mb-5"> <!-- extra bottom margin -->
+            <div class="card hover-card custom-card">
+                <!-- Top bar with name + role -->
+                <div class="card-top-bar d-flex justify-content-between align-items-center p-2 rounded-top">
+                    <h5 class="mb-0">{{ user.name }}</h5>
+                    <span class="badge 
+                        {% if user.user_type == 'outmess' %} bg-warning text-dark
+                        {% elif user.user_type == 'guest' %} bg-info text-dark
+                        {% elif user.user_type == 'inmate' %} bg-success
+                        {% else %} bg-secondary {% endif %}">
+                        {{ user.user_type|capitalize }}
+                    </span>
+                </div>
+
+                <!-- Card content -->
+                <div class="card-inner p-3">
+                    <p class="mb-1"><strong>ID:</strong> {{ user.id }}</p>
+                    <p class="mb-1"><strong>Email:</strong> {{ user.email }}</p>
+                    <p class="mb-1"><strong>Course:</strong> {{ user.course }}</p>
+                    <p class="mb-1"><strong>Phone:</strong> {{ user.phone }}</p>
+                    <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post" 
+                          onsubmit="return confirm('Are you sure you want to delete this user?');">
+                        <button type="submit" class="btn btn-danger w-100 mt-2 rounded-pill">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
     </div>
 </div>
 
-<!-- Optional: small-screen table scroll fix -->
+<!-- Styles -->
 <style>
-@media (max-width: 576px) {
-    .table td, .table th {
-        font-size: 0.85rem;
-        padding: 0.4rem;
+/* Solid blue card for mobile-friendly look */
+.custom-card {
+    background-color: #4dabf7; /* solid blue */
+    border-radius: 22px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+    min-height: 220px; /* enough for content */
+}
+.custom-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+}
+
+/* Top bar for name + role */
+.card-top-bar {
+    background: rgba(255, 255, 255, 0.15);
+    font-weight: 600;
+}
+
+/* Inner content with responsive padding */
+.card-inner {
+    padding: 0.75rem 1rem;
+}
+
+/* Compact text */
+.card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+.card p {
+    font-size: 0.85rem;
+    margin-bottom: 0.15rem;
+}
+
+/* Search input */
+#searchInput {
+    border-radius: 50px !important;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .custom-card {
+        min-height: auto; /* auto height for smaller screens */
     }
 }
 </style>
+
+<!-- JavaScript for search -->
+<script>
+document.getElementById('searchInput').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    let cards = document.querySelectorAll('#usersList .user-card');
+
+    cards.forEach(card => {
+        let text = card.textContent.toLowerCase();
+        card.style.display = text.includes(filter) ? '' : 'none';
+    });
+});
+</script>
 {% endblock %}
