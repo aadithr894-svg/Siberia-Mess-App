@@ -2,6 +2,7 @@ from locust import HttpUser, TaskSet, task, between
 from datetime import datetime, timedelta
 import random
 import string
+import json
 
 # ---------------- HELPER FUNCTIONS ----------------
 def random_string(length=6):
@@ -10,11 +11,17 @@ def random_string(length=6):
 def random_email():
     return f"{random_string(6)}@example.com"
 
+def random_phone():
+    return ''.join(random.choices("0123456789", k=10))
+
+def random_course():
+    return random.choice(["DCS", "SMS", "Other"])
+
 # ---------------- TASKS ----------------
 class UserBehavior(TaskSet):
 
     def on_start(self):
-        # Login as admin once per Locust user to approve
+        # Login as admin once per Locust user to approve users
         self.admin_email = "siberiamess4@gmail.com"
         self.admin_password = "siberia@123"
         self.login_admin()
@@ -26,12 +33,12 @@ class UserBehavior(TaskSet):
         })
 
     @task
-    def register_approve_mess_cut(self):
-        # 1️⃣ Register new user
+    def register_and_autoapprove(self):
+        # 1️⃣ Register a new user
         name = random_string()
         email = random_email()
-        phone = ''.join(random.choices(string.digits, k=10))
-        course = random.choice(["DCS", "SMS", "Other"])
+        phone = random_phone()
+        course = random_course()
         password = "user123"
         user_type = "outmess"
 
@@ -44,24 +51,20 @@ class UserBehavior(TaskSet):
             "user_type": user_type
         })
 
-        # 2️⃣ Approve user
-        # Using API: fetch new_users list
-        resp = self.client.get("/new_users")
-        import re
-        match = re.search(r'/approve_user/(\d+)"[^>]*>' + re.escape(email), resp.text)
-        if match:
-            user_id = match.group(1)
-            self.client.get(f"/approve_user/{user_id}")
+        # 2️⃣ Auto approve using /approve_bulk endpoint
+        self.client.post("/admin/approve_bulk", 
+            json={"emails": [email]}
+        )
 
-            # 3️⃣ Apply random mess cut (min 3 days)
-            today = datetime.now().date()
-            start_date = today + timedelta(days=random.randint(1, 5))
-            end_date = start_date + timedelta(days=random.randint(3, 7))
+        # 3️⃣ Apply random mess cut (min 3 days)
+        today = datetime.now().date()
+        start_date = today + timedelta(days=random.randint(1, 5))
+        end_date = start_date + timedelta(days=random.randint(3, 7))
 
-            self.client.post("/apply_mess_cut", data={
-                "start_date": start_date.isoformat(),
-                "end_date": end_date.isoformat()
-            })
+        self.client.post("/apply_mess_cut", data={
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat()
+        })
 
 # ---------------- LOCUST USER ----------------
 class WebsiteUser(HttpUser):
