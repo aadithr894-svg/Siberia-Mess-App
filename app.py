@@ -789,7 +789,7 @@ def scan_qr():
 
         # 🔹 Check if user has an active mess cut today
         cur.execute("""
-            SELECT * FROM mess_cuts
+            SELECT * FROM mess_cut
             WHERE user_id=%s AND start_date <= %s AND end_date >= %s
         """, (user_id, today, today))
         if cur.fetchone():
