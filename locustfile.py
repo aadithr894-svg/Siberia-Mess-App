@@ -13,20 +13,18 @@ class UserBehavior(TaskSet):
         self.new_users = []
 
     def admin_login(self):
-        # Step 1: GET login page to fetch CSRF token
         resp = self.client.get("/login")
         soup = BeautifulSoup(resp.text, "html.parser")
         csrf_token_input = soup.find("input", {"name": "csrf_token"})
         csrf_token = csrf_token_input["value"] if csrf_token_input else ""
 
-        # Step 2: POST login with CSRF
         login_resp = self.client.post("/login", data={
             "email": self.admin_email,
             "password": self.admin_password,
             "csrf_token": csrf_token
         }, allow_redirects=True)
 
-        if "Login successful" in login_resp.text or login_resp.status_code == 200:
+        if login_resp.status_code == 200:
             print("✅ Admin login successful")
             return True
         else:
@@ -41,7 +39,7 @@ class UserBehavior(TaskSet):
         phone = "".join([str(random.randint(0, 9)) for _ in range(10)])
         course = random.choice(["DCS", "SMS", "MBA"])
         password = "password123"
-        user_type = "outmess"  # ✅ User type is outmess
+        user_type = "outmess"
 
         resp = self.client.post("/register", data={
             "name": name,
@@ -74,17 +72,33 @@ class UserBehavior(TaskSet):
             else:
                 print(f"❌ Failed to approve: {u_email}")
 
-            # Step 4: Apply random mess cut (min 3 days)
+        # Step 4: Fetch user IDs and apply random mess cuts
+        users_resp = self.client.get("/admin/users")
+        soup = BeautifulSoup(users_resp.text, "html.parser")
+        # Assuming each user row has data-email and data-id attributes
+        user_rows = soup.find_all("tr")
+        user_id_map = {}
+        for row in user_rows:
+            email_td = row.find("td", {"data-email": True})
+            id_td = row.find("td", {"data-id": True})
+            if email_td and id_td:
+                user_id_map[email_td["data-email"]] = id_td["data-id"]
+
         for u_email in self.new_users:
+            user_id = user_id_map.get(u_email)
+            if not user_id:
+                print(f"❌ Could not fetch user ID for {u_email}")
+                continue
+
             start_date = datetime.today() + timedelta(days=random.randint(1, 10))
             end_date = start_date + timedelta(days=random.randint(3, 7))
 
             self.client.post("/apply_mess_cut", data={
-            "start_date": start_date.strftime("%d-%m-%Y"),  # ✅ DD-MM-YYYY
-            "end_date": end_date.strftime("%d-%m-%Y")       # ✅ DD-MM-YYYY
+                "user_id": user_id,
+                "start_date": start_date.strftime("%Y-%m-%d"),  # must be YYYY-MM-DD
+                "end_date": end_date.strftime("%Y-%m-%d")
             })
-            print(f"✅ Applied mess cut for {u_email} from {start_date.strftime('%d-%m-%Y')} to {end_date.strftime('%d-%m-%Y')}")
-
+            print(f"✅ Applied mess cut for {u_email} from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
 
         self.new_users.clear()
 
