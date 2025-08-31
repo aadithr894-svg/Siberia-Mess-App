@@ -773,24 +773,49 @@ live_counts = {
 
 
 
+# utils.py (or top of your app)
+def parse_qr_data(qr_data):
+    """
+    Parse QR code data in format:
+    user_id:{id},email:{email},mess_count:{count}
+    Returns dict with user_id, email, mess_count
+    """
+    try:
+        parts = {}
+        for part in qr_data.split(","):
+            key, value = part.split(":", 1)  # only split on first colon
+            parts[key.strip()] = value.strip()
+        parts['user_id'] = int(parts['user_id'])
+        parts['mess_count'] = int(parts.get('mess_count', 0))
+        return parts
+    except Exception as e:
+        return None
+
+
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
 def scan_qr():
-    if not getattr(current_user, 'is_admin', False):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    if not current_user.is_admin:
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
 
-    data = request.get_json(silent=True) or request.form
-    user_id = data.get('user_id')
-    meal_type = data.get('meal_type')
-    today = date.today()
+    data = request.get_json()
+    qr_data = data.get("qr_data", "")
+    meal_type = data.get("meal_type")
 
-    if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
-        return jsonify({'success': False, 'message': 'Invalid data'}), 400
+    if meal_type not in ['breakfast', 'lunch', 'dinner']:
+        return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
+
+    parsed = parse_qr_data(qr_data)
+    if not parsed:
+        return jsonify({'success': False, 'message': 'Invalid QR code format'}), 400
+
+    user_id = parsed['user_id']
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Check duplicate scan
+        # Check duplicate scan today
+        today = datetime.now().date()
         cur.execute("""
             SELECT id FROM meal_attendance
             WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
@@ -804,36 +829,25 @@ def scan_qr():
             INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
         """, (user_id, meal_type, today))
-
-        cur.execute("""UPDATE users SET mess_count = mess_count + 1 WHERE id = %s""", (user_id,))
+        # Update mess_count
+        cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id=%s", (user_id,))
         mysql.connection.commit()
 
-        # Increment temporary live counter
-        live_counts[meal_type] += 1  
-
-        # Get updated count from DB
-        cur.execute("""
-            SELECT COUNT(*) AS count FROM meal_attendance
-            WHERE meal_type=%s AND attendance_date=%s
-        """, (meal_type, today))
-        result = cur.fetchone()
-
+        # Fetch updated user info
         cur.execute("SELECT name, course, mess_count FROM users WHERE id=%s", (user_id,))
         user = cur.fetchone()
         cur.close()
 
         return jsonify({
             'success': True,
+            'message': f"Attendance recorded for {user['name']}",
             'name': user['name'],
             'course': user['course'],
-            'mess_count': user['mess_count'],
-            'count': result['count'],
-            'live_count': live_counts[meal_type]  # 🔹 return live count
+            'mess_count': user['mess_count']
         })
 
     except MySQLdb.Error as e:
-        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
-
+        return jsonify({'success': False, 'message': f"Database error: {str(e)}"}), 500
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
 @app.route('/admin/qr_scan_counts')

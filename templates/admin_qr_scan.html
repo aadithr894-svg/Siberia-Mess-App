@@ -13,14 +13,12 @@
       align-items: center;
       min-height: 100vh;
     }
-
     h2 {
       margin: 30px 0 15px 0;
       color: #1a1a1a;
       font-size: 2em;
       text-shadow: 1px 1px 2px #ccc;
     }
-
     #scanner-card {
       max-width: 500px;
       width: 90%;
@@ -33,11 +31,7 @@
       overflow: hidden;
       transition: transform 0.3s;
     }
-
-    #scanner-card:hover {
-      transform: translateY(-5px);
-    }
-
+    #scanner-card:hover { transform: translateY(-5px); }
     #reader {
       width: 100%;
       max-width: 400px;
@@ -47,17 +41,14 @@
       padding: 10px;
       background: #f0f7f5;
     }
-
     #result {
       margin-top: 15px;
       font-size: 1.2em;
       font-weight: bold;
       min-height: 1.5em;
     }
-
     .success { color: #4caf50; }
     .error { color: #f44336; }
-
     .count-box {
       margin-top: 20px;
       font-size: 1.1em;
@@ -67,7 +58,6 @@
       display: inline-block;
       box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
     }
-
     button {
       margin: 12px 8px 0 8px;
       padding: 12px 25px;
@@ -78,12 +68,7 @@
       font-weight: bold;
       transition: transform 0.2s, box-shadow 0.2s;
     }
-
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-
+    button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
     .btn-success { background: #4caf50; color: white; }
     .btn-danger { background: #f44336; color: white; }
   </style>
@@ -121,6 +106,7 @@
     function updateLiveCount() {
       const meal = detectMeal();
       mealTypeSpan.innerText = meal;
+      if(meal === 'Closed') return;
       fetch(`/admin/live_count/${meal}`)
         .then(res => res.json())
         .then(data => { if (data.success) liveCount.innerText = data.count; });
@@ -130,38 +116,32 @@
 
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      if (now - lastScanTime < 2000) return;
+      if (now - lastScanTime < 1500) return; // debounce
       lastScanTime = now;
 
-      let user_id = null;
-      try {
-        const parts = decodedText.split(",");
-        for (let p of parts) {
-          if (p.startsWith("user_id:")) {
-            user_id = p.split(":")[1];
-            break;
-          }
-        }
-      } catch (e) {}
-
-      if (!user_id) {
-        resultDiv.innerText = "❌ Invalid QR code!";
+      const meal = detectMeal();
+      if(meal === 'Closed') {
+        resultDiv.innerText = "❌ Mess closed now!";
         resultDiv.className = "error";
         return;
       }
 
-      const meal = detectMeal();
       fetch("/admin/scan_qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id, meal_type: meal })
+        body: JSON.stringify({ qr_data: decodedText, meal_type: meal })
       })
       .then(res => res.json())
       .then(data => {
-        if (data.success) {
+        if(data.success) {
+          if(data.on_cut) {
+            resultDiv.innerText = `⚠️ ${data.name} is on mess cut. Cannot mark attendance.`;
+            resultDiv.className = "error";
+            return;
+          }
           resultDiv.innerText = `✅ ${data.name} marked for ${meal}`;
           resultDiv.className = "success";
-          liveCount.innerText = data.count;
+          liveCount.innerText = data.mess_count || liveCount.innerText;
         } else {
           resultDiv.innerText = `❌ ${data.message}`;
           resultDiv.className = "error";
@@ -180,6 +160,7 @@
 
     document.getElementById("addCountBtn").addEventListener("click", () => {
       const meal = detectMeal();
+      if(meal === 'Closed') { alert("❌ Mess closed!"); return; }
       fetch("/admin/add_count", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -196,6 +177,7 @@
 
     document.getElementById("resetCountBtn").addEventListener("click", () => {
       const meal = detectMeal();
+      if(meal === 'Closed') { alert("❌ Mess closed!"); return; }
       fetch("/admin/reset_count", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
