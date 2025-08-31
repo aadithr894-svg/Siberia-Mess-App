@@ -8,21 +8,36 @@
   <style>
     body {
       font-family: 'Roboto', sans-serif;
-      background: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
+      background: #f0f4ff; /* light blue background */
       min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
+      padding: 1rem;
     }
     .card {
-      background: rgba(255,255,255,0.85);
-      backdrop-filter: blur(10px);
-      padding: 2rem;
+      background: #ffffff;
+      padding: 0;
       border-radius: 1rem;
-      width: 24rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      width: 26rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      overflow: hidden;
     }
-    h2 { text-align: center; font-weight: bold; margin-bottom: 1.5rem; color: #333; }
+    .card-header {
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      color: white;
+      padding: 1.2rem;
+      text-align: center;
+    }
+    .card-header h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .card-body {
+      padding: 2rem;
+      background: #f9fbff;
+    }
     .flash {
       padding: 0.75rem 1rem;
       border-radius: 0.5rem;
@@ -30,39 +45,72 @@
       font-weight: 500;
       text-align: center;
     }
-    .flash-success { background-color: #27ae60; color: white; }
-    .flash-danger { background-color: #e74c3c; color: white; }
-    .flash-warning { background-color: #f39c12; color: white; }
-    label { display: block; margin-bottom: 0.25rem; font-weight: 500; color: #555; }
-    input[type="date"] { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border-radius: 0.5rem; border: 1px solid #ccc; }
-    button { width: 100%; padding: 0.5rem; background-color: #6366f1; color: white; border-radius: 0.5rem; font-weight: 600; }
-    button:hover { background-color: #4f46e5; }
-    small { color: #666; display: block; margin-bottom: 1rem; }
+    .flash-success { background-color: #10b981; color: white; }
+    .flash-danger { background-color: #ef4444; color: white; }
+    .flash-warning { background-color: #f59e0b; color: white; }
+    label { display: block; margin-bottom: 0.35rem; font-weight: 600; color: #1e3a8a; }
+    input[type="date"] {
+      width: 100%;
+      padding: 0.7rem;
+      margin-bottom: 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid #93c5fd;
+      background: #f0f9ff;
+      font-size: 0.95rem;
+      transition: all 0.2s ease-in-out;
+    }
+    input[type="date"]:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
+      background: white;
+    }
+    button {
+      width: 100%;
+      padding: 0.8rem;
+      background-color: #2563eb;
+      color: white;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      transition: background 0.2s ease-in-out;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    small {
+      color: #374151;
+      display: block;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+    }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>Apply Mess Cut</h2>
+    <div class="card-header">
+      <h2>📘 Apply Mess Cut</h2>
+    </div>
+    <div class="card-body">
+      <!-- Flashed messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
 
-    <!-- Flashed messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="flash flash-{{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+      <form method="POST" id="mess-cut-form">
+        <label for="start_date">Start Date:</label>
+        <input type="date" id="start_date" name="start_date" min="{{ min_start_date }}" required onkeydown="return false;">
 
-    <form method="POST" id="mess-cut-form">
-      <label for="start_date">Start Date:</label>
-      <input type="date" id="start_date" name="start_date" min="{{ min_start_date }}" required>
+        <label for="end_date">End Date:</label>
+        <input type="date" id="end_date" name="end_date" min="{{ min_end_date }}" required onkeydown="return false;">
+        <small>⚠️ Minimum 3 consecutive days</small>
 
-      <label for="end_date">End Date:</label>
-      <input type="date" id="end_date" name="end_date" min="{{ min_end_date }}" required>
-      <small>Minimum 3 consecutive days</small>
-
-      <button type="submit">Apply Mess Cut</button>
-    </form>
+        <button type="submit">✅ Apply Mess Cut</button>
+      </form>
+    </div>
   </div>
 
   <script>

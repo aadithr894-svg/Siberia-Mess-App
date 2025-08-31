@@ -43,12 +43,12 @@
                     <div class="col-12 col-md-6">
                         <label class="form-label fw-bold">📅 Start Date</label>
                         <input type="date" class="form-control stylish-date" 
-                               name="start_date" id="startDate" required>
+                               name="start_date" id="startDate" required onkeydown="return false;">
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label fw-bold">📅 End Date</label>
                         <input type="date" class="form-control stylish-date" 
-                               name="end_date" id="endDate" required>
+                               name="end_date" id="endDate" required onkeydown="return false;">
                     </div>
                 </div>
 
@@ -95,6 +95,9 @@
     border-color: #28a745;
     outline: none;
 }
+@media (max-width: 576px) {
+    .stylish-input, .stylish-date { font-size: 14px; padding: 8px; }
+}
 </style>
 
 <!-- Scripts -->
@@ -112,16 +115,39 @@ document.getElementById("startDate").addEventListener("change", function() {
     minEnd.setDate(start.getDate() + 3); // +3 days
     const minEndStr = minEnd.toISOString().split("T")[0];
     document.getElementById("endDate").setAttribute("min", minEndStr);
+
+    if (document.getElementById("endDate").value && 
+        new Date(document.getElementById("endDate").value) < minEnd) {
+        document.getElementById("endDate").value = "";
+    }
 });
 
-// ✅ Validate before submit
+// ✅ Validate + Confirm before submit
 document.getElementById("messCutForm").addEventListener("submit", function(e) {
     const start = new Date(document.getElementById("startDate").value);
     const end = new Date(document.getElementById("endDate").value);
-    const diff = (end - start) / (1000 * 60 * 60 * 24); // days
+    const diff = (end - start) / (1000 * 60 * 60 * 24);
+
     if (diff < 3) {
         e.preventDefault();
         alert("❌ End date must be at least 3 days after start date!");
+        return;
+    }
+
+    // get selected user
+    const selectedUser = document.querySelector("input[name='user_id']:checked");
+    if (!selectedUser) {
+        e.preventDefault();
+        alert("❌ Please select a user.");
+        return;
+    }
+    const userLabel = document.querySelector("label[for='" + selectedUser.id + "']").innerText;
+
+    // confirmation popup
+    const confirmMsg = `✅ Please confirm:\n\n👤 User: ${userLabel}\n📅 Start: ${document.getElementById("startDate").value}\n📅 End: ${document.getElementById("endDate").value}\n\nDo you want to submit?`;
+    
+    if (!confirm(confirmMsg)) {
+        e.preventDefault();
     }
 });
 
