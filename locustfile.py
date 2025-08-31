@@ -74,16 +74,17 @@ class UserBehavior(TaskSet):
             else:
                 print(f"❌ Failed to approve: {u_email}")
 
-        # Step 4: Apply random mess cut (min 3 days)
+            # Step 4: Apply random mess cut (min 3 days)
         for u_email in self.new_users:
             start_date = datetime.today() + timedelta(days=random.randint(1, 10))
             end_date = start_date + timedelta(days=random.randint(3, 7))
 
             self.client.post("/apply_mess_cut", data={
-                "start_date": start_date.strftime("%Y-%m-%d"),
-                "end_date": end_date.strftime("%Y-%m-%d")
+            "start_date": start_date.strftime("%d-%m-%Y"),  # ✅ DD-MM-YYYY
+            "end_date": end_date.strftime("%d-%m-%Y")       # ✅ DD-MM-YYYY
             })
-            print(f"✅ Applied mess cut for {u_email} from {start_date.date()} to {end_date.date()}")
+            print(f"✅ Applied mess cut for {u_email} from {start_date.strftime('%d-%m-%Y')} to {end_date.strftime('%d-%m-%Y')}")
+
 
         self.new_users.clear()
 
