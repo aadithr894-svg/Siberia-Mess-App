@@ -1001,39 +1001,51 @@ def add_count():
 
 
 
-@app.route("/admin/add_meal_count", methods=["POST"])
+@app.route('/admin/add_meal_count', methods=['GET', 'POST'])
+@login_required
 def add_meal_count():
-    meal_date = request.form.get("meal_date")
-    meal_type = request.form.get("meal_type")
+    if not current_user.is_admin:
+        flash("Unauthorized access", "danger")
+        return redirect(url_for('admin_dashboard'))
 
-    cursor = mysql.connection.cursor()
+    if request.method == 'POST':
+        meal_date = request.form.get('meal_date')
+        meal_type = request.form.get('meal_type')
 
-    # Check if entry exists
-    cursor.execute("""
-        SELECT total_count FROM daily_meal_attendance
-        WHERE meal_date=%s AND meal_type=%s
-    """, (meal_date, meal_type))
-    result = cursor.fetchone()
+        if not meal_date or meal_type not in ['breakfast', 'lunch', 'dinner']:
+            flash("Invalid input", "danger")
+            return redirect(url_for('add_meal_count'))
 
-    if result:
-        # Update existing count
-        cursor.execute("""
-            UPDATE daily_meal_attendance
-            SET total_count = total_count + 1
-            WHERE meal_date=%s AND meal_type=%s
-        """, (meal_date, meal_type))
-    else:
-        # Insert new entry
-        cursor.execute("""
-            INSERT INTO daily_meal_attendance (meal_date, meal_type, total_count)
-            VALUES (%s, %s, 1)
-        """, (meal_date, meal_type))
+        try:
+            cur = mysql.connection.cursor()
+            # Insert or update count
+            cur.execute("""
+                INSERT INTO meal_counts (meal_date, meal_type, count)
+                VALUES (%s, %s, 1)
+                ON DUPLICATE KEY UPDATE count = count + 1
+            """, (meal_date, meal_type))
+            mysql.connection.commit()
+            cur.close()
+            flash(f"{meal_type.capitalize()} count added for {meal_date}", "success")
+        except Exception as e:
+            flash(f"Database error: {str(e)}", "danger")
+            return redirect(url_for('add_meal_count'))
 
-    mysql.connection.commit()
-    cursor.close()
-    flash(f"{meal_type.capitalize()} count updated for {meal_date}!", "success")
-    return redirect(url_for("admin_qr_scan_counts"))
+    # Fetch counts to show in table
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cur.execute("SELECT meal_date, meal_type, count FROM meal_counts ORDER BY meal_date DESC")
+    rows = cur.fetchall()
+    cur.close()
 
+    # Organize by date
+    counts_by_date = {}
+    for row in rows:
+        date = row['meal_date'].strftime("%Y-%m-%d")
+        if date not in counts_by_date:
+            counts_by_date[date] = {}
+        counts_by_date[date][row['meal_type']] = row['count']
+
+    return render_template("admin_meal_count.html", counts_by_date=counts_by_date)
 
 @app.route('/admin/users_meal_counts')
 @login_required
