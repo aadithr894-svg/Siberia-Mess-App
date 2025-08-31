@@ -1,65 +1,90 @@
-
-{% extends 'base.html' %}
 <!DOCTYPE html>
-
-
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Admin Meal Count</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 30px; }
-        table { border-collapse: collapse; width: 50%; margin-top: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-        th { background-color: #f2f2f2; }
-        form { margin-bottom: 20px; }
-        select, input[type=date] { margin-right: 10px; padding: 5px; }
-        button { padding: 5px 10px; }
-        .flash { color: green; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Meal Counts</title>
+<script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <h1>Admin Meal Count</h1>
+<body class="bg-gray-100 font-sans">
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+<div class="max-w-6xl mx-auto p-6">
 
-    <!-- Add Count Form -->
-    <form method="POST" action="{{ url_for('add_meal_count') }}">
-        <label for="meal_date">Select Date:</label>
-        <input type="date" name="meal_date" required>
+  <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">📊 Admin Meal Counts</h1>
 
-        <label for="meal_type">Select Meal:</label>
-        <select name="meal_type" required>
-            <option value="breakfast">Breakfast</option>
-            <option value="lunch">Lunch</option>
-            <option value="dinner">Dinner</option>
-        </select>
+  <!-- Flashed Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="mb-4">
+      {% for category, message in messages %}
+        <div class="px-4 py-2 rounded {{ 'bg-green-500 text-white' if category=='success' else 'bg-red-500 text-white' }} mb-2">
+          {{ message }}
+        </div>
+      {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
 
-        <button type="submit">Add Count</button>
-    </form>
+  <!-- Filter by Date -->
+  <div class="bg-white shadow rounded-lg p-4 mb-6 flex flex-wrap items-center gap-4">
+    <label class="font-medium text-gray-700">Select Date:</label>
+    <input type="date" id="filterDate" class="border rounded px-2 py-1" />
+    <button id="filterBtn" class="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-600">Filter</button>
+  </div>
 
-    <!-- Counts Table -->
-    <table>
+  <!-- Today's Counts Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-blue-500 text-white rounded-lg shadow p-6 text-center hover:scale-105 transform transition">
+      <h2 class="text-xl font-semibold">🍳 Breakfast</h2>
+      <p class="text-3xl font-bold mt-2" id="breakfastCount">{{ counts_by_date[today]['breakfast'] if today in counts_by_date else 0 }}</p>
+    </div>
+    <div class="bg-blue-600 text-white rounded-lg shadow p-6 text-center hover:scale-105 transform transition">
+      <h2 class="text-xl font-semibold">🍲 Lunch</h2>
+      <p class="text-3xl font-bold mt-2" id="lunchCount">{{ counts_by_date[today]['lunch'] if today in counts_by_date else 0 }}</p>
+    </div>
+    <div class="bg-blue-700 text-white rounded-lg shadow p-6 text-center hover:scale-105 transform transition">
+      <h2 class="text-xl font-semibold">🍽 Dinner</h2>
+      <p class="text-3xl font-bold mt-2" id="dinnerCount">{{ counts_by_date[today]['dinner'] if today in counts_by_date else 0 }}</p>
+    </div>
+  </div>
+
+  <!-- Historical Counts Table -->
+  <div class="bg-white shadow rounded-lg p-4 overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
         <tr>
-            <th>Date</th>
-            <th>Breakfast</th>
-            <th>Lunch</th>
-            <th>Dinner</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Breakfast</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lunch</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dinner</th>
         </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
         {% for date, meals in counts_by_date.items() %}
-        <tr>
-            <td>{{ date }}</td>
-            <td>{{ meals.get('breakfast', 0) }}</td>
-            <td>{{ meals.get('lunch', 0) }}</td>
-            <td>{{ meals.get('dinner', 0) }}</td>
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-4 whitespace-nowrap">{{ date }}</td>
+          <td class="px-6 py-4 whitespace-nowrap">{{ meals.get('breakfast', 0) }}</td>
+          <td class="px-6 py-4 whitespace-nowrap">{{ meals.get('lunch', 0) }}</td>
+          <td class="px-6 py-4 whitespace-nowrap">{{ meals.get('dinner', 0) }}</td>
         </tr>
         {% endfor %}
+      </tbody>
     </table>
+  </div>
+
+</div>
+
+<script>
+  // Filter counts by date dynamically
+  document.getElementById('filterBtn').addEventListener('click', () => {
+    const date = document.getElementById('filterDate').value;
+    if(!date) return alert("Select a date first");
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+      row.style.display = row.children[0].innerText === date ? '' : 'none';
+    });
+  });
+</script>
+
 </body>
 </html>
