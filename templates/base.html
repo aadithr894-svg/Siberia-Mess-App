@@ -1,211 +1,210 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siberia Mess App</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Siberia Mess App</title>
 
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<!-- Bootstrap 5 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <style>
-        :root {
-            --primary: #3498db;
-            --secondary: #2980b9;
-            --bg: #f0f4f8;
-            --card-bg: #ffffff;
-            --text-color: #333;
-            --radius: 12px;
-            --shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
+<style>
+    :root {
+        --primary: #3498db; /* single primary color */
+        --bg: #f0f4f8;
+        --card-bg: #ffffff;
+        --text-color: #333;
+        --radius: 12px;
+        --shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
 
-        body, nav, table, a, p, h1, h2, h3, h4, h5, h6, button {
-            font-family: 'Poppins', sans-serif;
-        }
+    body, nav, table, a, p, h1, h2, h3, h4, h5, h6, button {
+        font-family: 'Poppins', sans-serif;
+    }
 
-        body {
-            background-color: var(--bg);
-            margin: 0;
-            padding: 0;
-        }
+    body {
+        background-color: var(--bg);
+        margin: 0;
+        padding: 0;
+    }
 
-        /* Navbar */
+    /* Navbar */
+    nav {
+        background-color: var(--primary);
+        padding: 12px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: white;
+        border-bottom-left-radius: var(--radius);
+        border-bottom-right-radius: var(--radius);
+        box-shadow: var(--shadow);
+        flex-wrap: wrap;
+    }
+
+    nav .logo {
+        display: flex;
+        align-items: center;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 1px;
+    }
+
+    nav .logo img {
+        height: 40px;
+        width: 40px;
+        margin-right: 10px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid white;
+    }
+
+    nav .nav-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    nav a {
+        color: white;
+        text-decoration: none;
+        padding: 6px 12px;
+        border-radius: var(--radius);
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    nav a:hover {
+        background-color: rgba(255,255,255,0.2);
+    }
+
+    /* Main container */
+    .container {
+        padding: 20px;
+        max-width: 1200px;
+        margin: 20px auto;
+        background-color: var(--card-bg);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow-x: auto;
+    }
+
+    /* Buttons */
+    .btn-custom {
+        padding: 8px 20px;
+        border-radius: 50px;
+        background-color: var(--primary);
+        color: white;
+        font-weight: 600;
+        border: none;
+        transition: 0.3s;
+    }
+
+    .btn-custom:hover {
+        background-color: #2176c3;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+    }
+
+    /* Tables */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        border-radius: var(--radius);
+        overflow: hidden;
+        box-shadow: var(--shadow);
+    }
+
+    th, td {
+        padding: 12px 10px;
+        text-align: left;
+    }
+
+    th {
+        background-color: var(--primary);
+        color: white;
+    }
+
+    tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+
+    tr:hover {
+        background-color: #e1f0ff;
+    }
+
+    /* Responsive navbar */
+    @media (max-width: 768px) {
         nav {
-            background: linear-gradient(90deg, var(--secondary), var(--primary));
-            padding: 12px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: white;
-            border-bottom-left-radius: var(--radius);
-            border-bottom-right-radius: var(--radius);
-            box-shadow: var(--shadow);
-            flex-wrap: wrap;
-        }
-
-        nav .logo {
-            display: flex;
-            align-items: center;
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: 1px;
-        }
-
-        nav .logo img {
-            height: 40px;
-            width: 40px;
-            margin-right: 10px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid white;
+            flex-direction: column;
+            align-items: flex-start;
         }
 
         nav .nav-links {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        nav a {
-            color: white;
-            text-decoration: none;
-            padding: 6px 12px;
-            border-radius: var(--radius);
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        nav a:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-
-        /* Main container */
-        .container {
-            padding: 20px;
-            max-width: 1200px;
-            margin: 20px auto;
-            background-color: var(--card-bg);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            overflow-x: auto;
-        }
-
-        /* Buttons */
-        .btn-custom {
-            padding: 8px 20px;
-            border-radius: 50px;
-            background-color: var(--primary);
-            color: white;
-            font-weight: 600;
-            border: none;
-            transition: 0.3s;
-        }
-
-        .btn-custom:hover {
-            background-color: var(--secondary);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 18px rgba(0,0,0,0.2);
-        }
-
-        /* Tables */
-        table {
+            flex-direction: column;
             width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            border-radius: var(--radius);
-            overflow: hidden;
-            box-shadow: var(--shadow);
         }
 
-        th, td {
-            padding: 12px 10px;
+        nav .nav-links a {
+            width: 100%;
             text-align: left;
+            padding: 10px 0;
         }
+    }
 
-        th {
-            background-color: var(--primary);
-            color: white;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f8f9fa;
-        }
-
-        tr:hover {
-            background-color: #e1f0ff;
-        }
-
-        /* Responsive navbar */
-        @media (max-width: 768px) {
-            nav {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            nav .nav-links {
-                flex-direction: column;
-                width: 100%;
-            }
-
-            nav .nav-links a {
-                width: 100%;
-                text-align: left;
-                padding: 10px 0;
-            }
-        }
-
-        footer {
-            text-align: center;
-            margin-top: 40px;
-            font-size: 0.9rem;
-            color: #7f8c8d;
-        }
-    </style>
+    footer {
+        text-align: center;
+        margin-top: 40px;
+        font-size: 0.9rem;
+        color: #7f8c8d;
+    }
+</style>
 </head>
 <body>
 
-    <!-- Navbar -->
-    <nav>
-        <div class="logo">
-            <img src="{{ url_for('static', filename='Images/logo.png') }}" alt="Siberia Mess Logo">
-            Siberia Mess
-        </div>
-        <div class="nav-links">
-            {% if current_user.is_authenticated %}
-                {% if current_user.is_admin %}
-                    <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
-                    <a href="{{ url_for('users_list') }}">Users List</a>
-                    <a href="{{ url_for('new_users_list') }}">New Users</a>
-                    <a href="{{ url_for('mess_cut_list') }}">Mess Cuts</a>
-                    <a href="{{ url_for('late_mess_list') }}">Late Mess</a>
-                {% else %}
-                    <a href="{{ url_for('user_dashboard') }}">Dashboard</a>
-                    <a href="{{ url_for('apply_mess_cut') }}">Apply Mess Cut</a>
-                    <a href="{{ url_for('request_late_mess') }}">Request Late Mess</a>
-                    <a href="{{ url_for('my_qr') }}">My QR Code</a>
-                {% endif %}
-                <a href="{{ url_for('logout') }}">Logout</a>
-            {% else %}
-                <a href="{{ url_for('login') }}">Login</a>
-                <a href="{{ url_for('register') }}">Register</a>
-            {% endif %}
-        </div>
-    </nav>
-
-    <!-- Main content -->
-    <div class="container">
-        {% block content %}{% endblock %}
+<!-- Navbar -->
+<nav>
+    <div class="logo">
+        <img src="{{ url_for('static', filename='Images/logo.png') }}" alt="Siberia Mess Logo">
+        Siberia Mess
     </div>
+    <div class="nav-links">
+        {% if current_user.is_authenticated %}
+            {% if current_user.is_admin %}
+                <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('users_list') }}">Users List</a>
+                <a href="{{ url_for('new_users_list') }}">New Users</a>
+                <a href="{{ url_for('mess_cut_list') }}">Mess Cuts</a>
+                <a href="{{ url_for('late_mess_list') }}">Late Mess</a>
+            {% else %}
+                <a href="{{ url_for('user_dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('apply_mess_cut') }}">Apply Mess Cut</a>
+                <a href="{{ url_for('request_late_mess') }}">Request Late Mess</a>
+                <a href="{{ url_for('my_qr') }}">My QR Code</a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a href="{{ url_for('login') }}">Login</a>
+            <a href="{{ url_for('register') }}">Register</a>
+        {% endif %}
+    </div>
+</nav>
 
-    <!-- Footer -->
-    <footer>
-        &copy; {{ current_year if current_year else "2025" }} Siberia Mess App. All rights reserved.
-    </footer>
+<!-- Main content -->
+<div class="container">
+    {% block content %}{% endblock %}
+</div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Footer -->
+<footer>
+    &copy; {{ current_year if current_year else "2025" }} Siberia Mess App. All rights reserved.
+</footer>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
