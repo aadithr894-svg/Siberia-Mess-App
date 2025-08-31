@@ -862,8 +862,7 @@ def qr_scan_counts():
     except Exception as e:
         flash(f"Error fetching counts: {e}", "danger")
     
-    return render_template("admin_meal_count.html", counts_by_date=counts_by_date)
-
+    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
 
 
 
