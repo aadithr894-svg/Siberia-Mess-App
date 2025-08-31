@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="card shadow-sm border rounded-3">
+        
+        <!-- Header -->
+        <div class="card-header text-center bg-light">
+            <h4 class="mb-0">➕ Add Mess Cut</h4>
+            <small class="text-muted">Assign mess cuts easily with search & date selection</small>
+        </div>
+
+        <!-- Body -->
+        <div class="card-body bg-white">
+            <form method="POST" id="messCutForm">
+
+                <!-- Search Box -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">🔍 Search User</label>
+                    <input type="text" id="userSearch" 
+                           class="form-control stylish-input" 
+                           placeholder="Type a name or course...">
+                </div>
+
+                <!-- User List -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">👤 Select User</label>
+                    <div id="userList" class="stylish-list">
+                        {% for user in users %}
+                        <div class="form-check user-item">
+                            <input class="form-check-input" type="radio" 
+                                   name="user_id" value="{{ user.id }}" id="user{{ user.id }}" required>
+                            <label class="form-check-label" for="user{{ user.id }}">
+                                {{ user.name }} — {{ user.course }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Dates -->
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-bold">📅 Start Date</label>
+                        <input type="date" class="form-control stylish-date" 
+                               name="start_date" id="startDate" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-bold">📅 End Date</label>
+                        <input type="date" class="form-control stylish-date" 
+                               name="end_date" id="endDate" required>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div class="d-grid mt-4">
+                    <button type="submit" class="btn btn-success py-2 rounded-pill shadow-sm fs-5">
+                        ✅ Add Mess Cut
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Styling -->
+<style>
+.stylish-input {
+    border: 2px solid #007bff;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 16px;
+}
+.stylish-list {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #fff;
+}
+.user-item {
+    padding: 6px 10px;
+    border-bottom: 1px solid #f1f1f1;
+}
+.user-item:last-child { border-bottom: none; }
+.user-item:hover { background: #f8f9fa; border-radius: 6px; }
+.stylish-date {
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 16px;
+}
+.stylish-date:focus {
+    border-color: #28a745;
+    outline: none;
+}
+</style>
+
+<!-- Scripts -->
+<script>
+// ✅ Prevent selecting past dates
+const today = new Date().toISOString().split("T")[0];
+document.getElementById("startDate").setAttribute("min", today);
+document.getElementById("endDate").setAttribute("min", today);
+
+// ✅ Auto enforce minimum 3 days gap
+document.getElementById("startDate").addEventListener("change", function() {
+    const start = new Date(this.value);
+    if (isNaN(start)) return;
+    const minEnd = new Date(start);
+    minEnd.setDate(start.getDate() + 3); // +3 days
+    const minEndStr = minEnd.toISOString().split("T")[0];
+    document.getElementById("endDate").setAttribute("min", minEndStr);
+});
+
+// ✅ Validate before submit
+document.getElementById("messCutForm").addEventListener("submit", function(e) {
+    const start = new Date(document.getElementById("startDate").value);
+    const end = new Date(document.getElementById("endDate").value);
+    const diff = (end - start) / (1000 * 60 * 60 * 24); // days
+    if (diff < 3) {
+        e.preventDefault();
+        alert("❌ End date must be at least 3 days after start date!");
+    }
+});
+
+// 🔍 Live search for users
+document.getElementById("userSearch").addEventListener("keyup", function() {
+    const searchValue = this.value.toLowerCase();
+    const items = document.querySelectorAll("#userList .user-item");
+    items.forEach(item => {
+        const text = item.innerText.toLowerCase();
+        item.style.display = text.includes(searchValue) ? "" : "none";
+    });
+});
+</script>
+{% endblock %}

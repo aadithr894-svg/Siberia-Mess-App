@@ -13,6 +13,11 @@
         View QR Scan Counts
     </a>
 
+    <!-- Add Mess Cut -->
+    <a href="{{ url_for('add_mess_cut_admin') }}" class="btn btn-warning" style="text-align: center; padding: 10px 20px;">
+        ➕ Add Mess Cut
+    </a>
+
     <!-- Reset Late Mess Button -->
     <form action="{{ url_for('reset_late_mess') }}" method="POST" onsubmit="return confirm('Are you sure you want to reset all late mess entries?');">
         <button type="submit" class="btn btn-danger" style="width: 100%; padding: 10px 20px;">

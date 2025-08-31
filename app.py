@@ -1036,6 +1036,28 @@ def users_meal_counts():
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
 
 
+@app.route('/admin/add_mess_cut', methods=['GET', 'POST'])
+@login_required
+def add_mess_cut_admin():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT id, name, course FROM users")  # ✅ ensure course exists in DB
+    users = cursor.fetchall()
+
+    if request.method == 'POST':
+        user_id = request.form['user_id']
+        start_date = request.form['start_date']
+        end_date = request.form['end_date']
+
+        cursor.execute(
+            "INSERT INTO mess_cut (user_id, start_date, end_date) VALUES (%s, %s, %s)",
+            (user_id, start_date, end_date)
+        )
+        mysql.connection.commit()
+        flash("Mess cut added successfully!", "success")
+        return redirect(url_for('add_mess_cut_admin'))
+
+    return render_template('admin_add_mess_cut.html', users=users)
+
 
 
 
