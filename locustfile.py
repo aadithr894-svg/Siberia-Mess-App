@@ -1,16 +1,6 @@
-# locustfile.py
-import csv
 import random
 from locust import HttpUser, task, between
 
-# Load test users from CSV
-users = []
-with open("test_users.csv", newline="") as csvfile:
-    reader = csv.DictReader(csvfile)
-    for row in reader:
-        users.append({"email": row["email"], "password": row["password"]})
-
-# Random names and courses for registration
 names = ["Alice", "Bob", "Charlie", "David", "Eve"]
 courses = ["DCS", "SMS", "BCA", "MCA", "EEE"]
 
@@ -18,12 +8,11 @@ class MessAppUser(HttpUser):
     wait_time = between(1, 3)
 
     def on_start(self):
-        # Pick a random user
-        self.user_data = random.choice(users)
-        self.email = self.user_data["email"]
-        self.password = self.user_data["password"]
+        # Unique email per Locust instance
+        self.email = f"user{random.randint(10000,99999)}@test.com"
+        self.password = "Password123"
 
-        # Register user
+        # 1️⃣ Register
         reg_data = {
             "name": random.choice(names),
             "email": self.email,
@@ -32,46 +21,39 @@ class MessAppUser(HttpUser):
             "password": self.password,
             "user_type": "student"
         }
-        with self.client.post("/register", data=reg_data, catch_response=True) as response:
-            if response.status_code == 302:  # redirects to login
-                response.success()
-            else:
-                response.failure(f"Register failed: {response.text}")
+        self.client.post("/register", data=reg_data, allow_redirects=True)
 
-        # Approve user via admin bulk API
+        # 2️⃣ Login as admin to approve the new user
         admin_login = {"email": "siberiamess4@gmail.com", "password": "siberia@123"}
-        with self.client.post("/login", data=admin_login, catch_response=True) as resp:
-            if resp.status_code == 302:
-                resp.success()
-            else:
-                resp.failure(f"Admin login failed: {resp.text}")
+        self.client.post("/login", data=admin_login, allow_redirects=True)
 
-        with self.client.post("/admin/approve_bulk", json={"emails": [self.email]}, catch_response=True) as resp:
-            if resp.status_code == 200:
-                resp.success()
-            else:
-                resp.failure(f"Approval failed: {resp.text}")
+        # Approve the newly registered user
+        self.client.post("/admin/approve_bulk", json={"emails": [self.email]}, allow_redirects=True)
 
-        # Login as student
-        login_data = {"email": self.email, "password": self.password}
-        with self.client.post("/login", data=login_data, catch_response=True) as resp:
-            if resp.status_code == 302:
-                resp.success()
-            else:
-                resp.failure(f"Student login failed: {resp.text}")
+        # Logout admin
+        self.client.get("/logout", allow_redirects=True)
+
+        # 3️⃣ Login as student
+        student_login = {"email": self.email, "password": self.password}
+        self.client.post("/login", data=student_login, allow_redirects=True)
+
+        # Flag for running mess cut only once
+        self.mess_cut_done = False
 
     @task
-    def apply_mess_cut(self):
+    def apply_mess_cut_once(self):
+        if self.mess_cut_done:
+            return
+
         from datetime import date, timedelta
         today = date.today()
         start = today + timedelta(days=2)
         end = start + timedelta(days=3)
+
         cut_data = {
             "start_date": start.isoformat(),
             "end_date": end.isoformat()
         }
-        with self.client.post("/apply_mess_cut", data=cut_data, catch_response=True) as resp:
-            if resp.status_code == 302:
-                resp.success()
-            else:
-                resp.failure(f"Mess cut failed: {resp.text}")
+
+        self.client.post("/apply_mess_cut", data=cut_data, allow_redirects=True)
+        self.mess_cut_done = True
