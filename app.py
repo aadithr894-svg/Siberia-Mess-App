@@ -847,22 +847,30 @@ def scan_qr():
 def qr_scan_counts():
     counts_by_date = {}
     try:
-        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cur.execute("SELECT count_date, breakfast, lunch, dinner FROM confirmed_meal_counts ORDER BY created_date DESC")
+        cur = mysql.connection.cursor()
+        cur.execute("""
+            SELECT attendance_date, meal_type, COUNT(*) AS count
+            FROM meal_attendance
+            GROUP BY attendance_date, meal_type
+            ORDER BY attendance_date DESC
+        """)
         rows = cur.fetchall()
         cur.close()
 
         for row in rows:
-            date_str = row['date'].strftime("%Y-%m-%d")
-            counts_by_date[date_str] = {
-                'breakfast': row.get('breakfast', 0),
-                'lunch': row.get('lunch', 0),
-                'dinner': row.get('dinner', 0)
-            }
+            date_str = row[0].strftime("%Y-%m-%d")  # row[0] is attendance_date
+            meal = row[1]
+            count = row[2]
+
+            if date_str not in counts_by_date:
+                counts_by_date[date_str] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
+            counts_by_date[date_str][meal] = count
+
     except Exception as e:
         flash(f"Error fetching counts: {e}", "danger")
     
     return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
+
 
 
 
