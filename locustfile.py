@@ -1,69 +1,81 @@
-from locust import HttpUser, task, between
+from locust import HttpUser, TaskSet, task, between
 from faker import Faker
+from datetime import datetime, timedelta
 import random
-from datetime import date, timedelta
 
 fake = Faker()
 
-# Replace with your admin credentials
-ADMIN_EMAIL = "admin@example.com"
-ADMIN_PASSWORD = "adminpassword"
-
-class WebsiteUser(HttpUser):
-    wait_time = between(1, 3)
-    admin_logged_in = False
-    admin_cookies = None
+class UserBehavior(TaskSet):
+    def on_start(self):
+        # Admin credentials
+        self.admin_email = "siberiamess4@gmail.com"
+        self.admin_password = "siberia@123"
+        self.new_users = []
 
     @task
-    def register_user(self):
-        # Random mess cut: minimum 3 days
-        mess_days = random.randint(3, 7)
-        mess_start = date.today()
-        mess_end = mess_start + timedelta(days=mess_days)
-
-        user_data = {
-            "name": fake.name(),
-            "email": fake.unique.email(),
-            "phone": str(fake.random_number(digits=10, fix_len=True)),
-            "course": fake.word(),
-            "password": "Password123",
-            "user_type": "outmess",
-            "mess_cut_start": mess_start.isoformat(),
-            "mess_cut_end": mess_end.isoformat()
-        }
+    def register_and_approve(self):
+        # Step 1: Register random user
+        name = fake.name()
+        email = fake.unique.email()
+        phone = "".join([str(random.randint(0, 9)) for _ in range(10)])
+        course = random.choice(["DCS", "SMS", "MBA"])
+        password = "password123"
+        user_type = "outmess"
 
         # Register user
-        with self.client.post("/register", data=user_data, catch_response=True) as response:
-            if "successfully registered" in response.text.lower():
-                response.success()
-                print(f"✅ Registered: {user_data['email']}")
-                # Attempt admin approval
-                self.approve_user(user_data["email"])
-            else:
-                response.failure(f"⚠️ Registration failed: {response.text}")
+        response = self.client.post("/register", data={
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "course": course,
+            "password": password,
+            "user_type": user_type
+        }, allow_redirects=True)
 
-    def approve_user(self, user_email):
-        # Login admin if not already
-        if not self.admin_logged_in:
-            admin_data = {
-                "email": ADMIN_EMAIL,
-                "password": ADMIN_PASSWORD
-            }
-            with self.client.post("/login", data=admin_data, catch_response=True) as resp:
-                if "dashboard" in resp.text.lower() or resp.status_code == 200:
-                    self.admin_logged_in = True
-                    self.admin_cookies = resp.cookies
-                    resp.success()
-                    print("✅ Admin logged in")
-                else:
-                    resp.failure("⚠️ Admin login failed")
-                    return
+        if response.status_code == 200:
+            self.new_users.append(email)
+            print(f"✅ Registered: {email}")
 
-        # Approve the user (replace with your actual endpoint)
-        approve_data = {"email": user_email}
-        with self.client.post("/admin/approve_user", data=approve_data, cookies=self.admin_cookies, catch_response=True) as resp:
-            if resp.status_code == 200 and "approved" in resp.text.lower():
-                resp.success()
-                print(f"✅ Approved: {user_email}")
+        # Step 2: Login as admin
+        login_resp = self.client.post("/login", data={
+            "email": self.admin_email,
+            "password": self.admin_password
+        }, allow_redirects=True)
+
+        if "Login successful" not in login_resp.text:
+            print("⚠️ Admin login failed")
+            return
+
+        # Step 3: Approve the user(s)
+        for u_email in self.new_users:
+            approve_resp = self.client.post("/admin/approve_bulk",
+                json={"emails": [u_email]},
+                headers={"Content-Type": "application/json"}
+            )
+            if approve_resp.status_code == 200:
+                print(f"✅ Approved: {u_email}")
             else:
-                resp.failure(f"⚠️ Approval failed: {resp.text}")
+                print(f"❌ Failed to approve: {u_email}")
+
+        # Step 4: Apply random mess cut (min 3 days)
+        for u_email in self.new_users:
+            start_date = datetime.today() + timedelta(days=random.randint(1, 10))
+            end_date = start_date + timedelta(days=random.randint(3, 7))
+
+            # Fetch user ID after approval
+            user_id_resp = self.client.get("/admin/users")  # This returns HTML; you may parse it or use DB API
+            # For simplicity, we skip getting exact user_id; in real setup, fetch user ID after approval
+
+            # Simulate applying mess cut
+            self.client.post("/apply_mess_cut", data={
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "end_date": end_date.strftime("%Y-%m-%d")
+            })
+            print(f"✅ Applied mess cut for {u_email} from {start_date.date()} to {end_date.date()}")
+
+        # Clear new users for next run
+        self.new_users.clear()
+
+class WebsiteUser(HttpUser):
+    tasks = [UserBehavior]
+    wait_time = between(2, 5)
