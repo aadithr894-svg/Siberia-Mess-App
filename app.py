@@ -324,12 +324,14 @@ import base64
 @app.route('/dashboard')
 @login_required
 def user_dashboard():
-    # Generate QR code
-    qr = qrcode.QRCode(box_size=10, border=5)
-    qr.add_data(str(current_user.id))
+    # Generate QR using same logic as my_qr
+    user_id = current_user.id
+    qr_data = f"id:{user_id}"  # Only include ID
+    qr = qrcode.QRCode(box_size=10, border=4)
+    qr.add_data(qr_data)
     qr.make(fit=True)
-    img = qr.make_image(fill='black', back_color='white')
-    
+    img = qr.make_image(fill_color='black', back_color='white')
+
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     qr_code_b64 = base64.b64encode(buffer.getvalue()).decode('ascii')
@@ -337,13 +339,10 @@ def user_dashboard():
     # Fetch late mess requests
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cur.execute("SELECT * FROM late_mess WHERE user_id = %s ORDER BY date_requested DESC", (current_user.id,))
-
     late_requests = cur.fetchall()
     cur.close()
 
     return render_template('dashboard.html', qr_code=qr_code_b64, late_requests=late_requests)
-
-
 
 # -------- ADMIN DASHBOARD --------
 @app.route('/admin')
@@ -718,7 +717,7 @@ import qrcode
 import io
 import base64
 
-app = Flask(__name__)
+
 
 @app.route("/my_qr")
 def my_qr():
