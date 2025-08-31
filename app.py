@@ -721,23 +721,31 @@ def request_late_mess():
 @app.route('/my_qr')
 @login_required
 def my_qr():
-    # Fetch current mess count from DB
+    """
+    Generates a QR code for the logged-in user containing:
+    user_id, email, and mess_count
+    """
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT mess_count FROM users WHERE id=%s", (current_user.id,))
     data = cursor.fetchone()
     mess_count = data['mess_count'] if data else 0
     cursor.close()
 
+    # Prepare QR content
     qr_data = f"user_id:{current_user.id},email:{current_user.email},mess_count:{mess_count}"
-    
+
+    # Generate QR code
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(qr_data)
     qr.make(fit=True)
-    img = qr.make_image(fill='black', back_color='white')
-    img_bytes = io.BytesIO()
-    img.save(img_bytes, format='PNG')
-    img_bytes.seek(0)
-    return send_file(img_bytes, mimetype='image/png')
+    img = qr.make_image(fill_color='black', back_color='white')
+
+    # Send image as response
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return send_file(buffer, mimetype="image/png")
+
 
 
 # -------- ADMIN: SCAN QR AND INCREMENT MESS COUNT --------
@@ -749,10 +757,9 @@ from datetime import date, datetime
 @app.route('/admin/qr_scan')
 @login_required
 def admin_qr_scan():
-    if not getattr(current_user, 'is_admin', False):
+    if not current_user.is_admin:
         return "Unauthorized", 403
-    return render_template('admin_qr_scan.html', current_date=date.today().strftime("%Y-%m-%d"))
-
+    return render_template('admin_qr_scan.html')
 
 
 
@@ -803,63 +810,57 @@ def scan_qr():
     meal_type = data.get("meal_type")
 
     # Validate meal type
-    if meal_type not in ['breakfast', 'lunch', 'dinner']:
-        return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
+    if meal_type not in ["breakfast", "lunch", "dinner"]:
+        return jsonify({"success": False, "message": "Invalid meal type"}), 400
 
     # Parse QR
-    parsed = parse_qr_data(qr_data)
-    if not parsed:
-        return jsonify({'success': False, 'message': 'Invalid QR code format'}), 400
-
-    user_id = parsed['user_id']
-    today = datetime.now().date()
-
     try:
-        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        parts = dict(part.split(":") for part in qr_data.split(","))
+        user_id = int(parts["user_id"])
+    except Exception:
+        return jsonify({"success": False, "message": "Invalid QR code"}), 400
 
-        # Check if user is on mess cut
-        cur.execute("""
-            SELECT * FROM mess_cut
-            WHERE user_id=%s AND start_date <= %s AND end_date >= %s
-        """, (user_id, today, today))
-        if cur.fetchone():
-            cur.close()
-            return jsonify({'success': False, 'message': 'User is on mess cut today'}), 400
+    today = datetime.now().date()
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Check if already scanned
-        cur.execute("""
-            SELECT id FROM meal_attendance
-            WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
-        """, (user_id, meal_type, today))
-        if cur.fetchone():
-            cur.close()
-            return jsonify({'success': False, 'message': f'Already scanned for {meal_type} today'}), 400
-
-        # Record attendance
-        cur.execute("""
-            INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
-            VALUES (%s, %s, %s)
-        """, (user_id, meal_type, today))
-
-        # Update mess count
-        cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id=%s", (user_id,))
-        mysql.connection.commit()
-
-        # Fetch updated user info
-        cur.execute("SELECT name, course, mess_count FROM users WHERE id=%s", (user_id,))
-        user = cur.fetchone()
+    # Check mess cut
+    cur.execute("""
+        SELECT 1 FROM mess_cut 
+        WHERE user_id=%s AND start_date <= %s AND end_date >= %s
+    """, (user_id, today, today))
+    if cur.fetchone():
         cur.close()
+        return jsonify({"success": False, "message": "User is on mess cut today"}), 400
 
-        return jsonify({
-            'success': True,
-            'message': f"Attendance recorded for {user['name']}",
-            'name': user['name'],
-            'course': user['course'],
-            'mess_count': user['mess_count']
-        })
+    # Check already scanned
+    cur.execute("""
+        SELECT 1 FROM meal_attendance
+        WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
+    """, (user_id, meal_type, today))
+    if cur.fetchone():
+        cur.close()
+        return jsonify({"success": False, "message": f"Already scanned for {meal_type} today"}), 400
 
-    except MySQLdb.Error as e:
-        return jsonify({'success': False, 'message': f"Database error: {str(e)}"}), 500
+    # Record attendance
+    cur.execute("""
+        INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
+        VALUES (%s, %s, %s)
+    """, (user_id, meal_type, today))
+    cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id=%s", (user_id,))
+    mysql.connection.commit()
+
+    # Return updated info
+    cur.execute("SELECT name, course, mess_count FROM users WHERE id=%s", (user_id,))
+    user = cur.fetchone()
+    cur.close()
+
+    return jsonify({
+        "success": True,
+        "message": f"Attendance recorded for {user['name']}",
+        "name": user["name"],
+        "course": user["course"],
+        "mess_count": user["mess_count"]
+    })
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
 @app.route('/admin/qr_scan_counts')
