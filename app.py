@@ -787,6 +787,15 @@ def scan_qr():
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
+        # 🔹 Check if user has an active mess cut today
+        cur.execute("""
+            SELECT * FROM mess_cuts
+            WHERE user_id=%s AND start_date <= %s AND end_date >= %s
+        """, (user_id, today, today))
+        if cur.fetchone():
+            cur.close()
+            return jsonify({'success': False, 'message': 'User has a mess cut today. Scan not allowed.'}), 403
+
         # Check duplicate scan
         cur.execute("""
             SELECT id FROM meal_attendance
