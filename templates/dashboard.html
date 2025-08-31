@@ -6,13 +6,9 @@
 
     <div style="display: inline-block; background: #f9f9f9; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 30px;">
         <h3 style="color: #34495e;">Your QR Code</h3>
-        <img id="qr-img" src="data:image/png;base64,{{ qr_code }}" alt="QR Code"
-             style="width:200px; height:200px; margin: 15px 0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code" style="width:200px; height:200px; margin: 15px 0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
         <br>
-        <a id="download-btn" class="btn" href="#" download="my_qr.png"
-           style="display:inline-block; padding: 10px 20px; margin-top: 10px; background-color: #e67e22; color: white; text-decoration:none; border-radius: 8px; transition: 0.3s;">
-           Download QR Code
-        </a>
+        <a class="btn" href="{{ url_for('my_qr') }}" style="display:inline-block; padding: 10px 20px; margin-top: 10px; background-color: #e67e22; color: white; text-decoration:none; border-radius: 8px; transition: 0.3s;">Download QR Code</a>
     </div>
 
     <h3 style="color: #34495e; margin-bottom: 15px;">Actions</h3>
@@ -29,12 +25,4 @@
         box-shadow: 0 6px 12px rgba(0,0,0,0.15);
     }
 </style>
-
-<script>
-    // Make base64 QR code downloadable
-    const qrImg = document.getElementById("qr-img");
-    const downloadBtn = document.getElementById("download-btn");
-    downloadBtn.href = qrImg.src;
-</script>
-
 {% endblock %}

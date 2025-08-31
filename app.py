@@ -238,62 +238,76 @@ from flask_login import login_required, current_user
 @app.route('/approve_user/<int:user_id>')
 @login_required
 def approve_user(user_id):
-    if not current_user.is_admin:
+    if not current_user.is_admin:   # ensure only admin can approve
         flash("❌ Unauthorized", "danger")
         return redirect(url_for('user_dashboard'))
 
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
     try:
-        # 1. Fetch from new_users
-        cur.execute("SELECT * FROM new_users WHERE id=%s", (user_id,))
+        # 1. Fetch user details from new_users
+        cur.execute("SELECT * FROM new_users WHERE id = %s", (user_id,))
         user = cur.fetchone()
+
         if not user:
             flash("⚠️ User not found!", "warning")
             return redirect(url_for('new_users_list'))
 
         # 2. Prevent duplicate email
-        cur.execute("SELECT id FROM users WHERE email=%s", (user['email'],))
+        cur.execute("SELECT id FROM users WHERE email = %s", (user['email'],))
         if cur.fetchone():
             flash("⚠️ A user with this email already exists!", "danger")
             return redirect(url_for('new_users_list'))
 
-        # 3. Insert into users
+        # 3. Insert into users (qr_path left empty initially)
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved, qr_path)
-            VALUES (%s,%s,%s,%s,%s,%s,1,'')
-        """, (user['name'], user['email'], user['phone'], user['course'], user['password'], user['user_type']))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            user['name'], user['email'], user['phone'], user['course'],
+            user['password'], user['user_type'], 1, ""
+        ))
+
         new_user_id = cur.lastrowid
 
-        # 4. Generate QR based on ID
-        qr_data = f"user_id:{new_user_id}"  # ✅ ID based QR
+        # 4. Generate QR Code
+        qr_data = f"ID:{new_user_id}|Name:{user['name']}|Email:{user['email']}|Type:{user['user_type']}"
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
         qr.add_data(qr_data)
         qr.make(fit=True)
         img = qr.make_image(fill_color='black', back_color='white')
 
+        # Save QR code in static/qrcodes/
         qr_folder = os.path.join("static", "qrcodes")
         os.makedirs(qr_folder, exist_ok=True)
         qr_filename = f"user_{new_user_id}.png"
         qr_path = os.path.join(qr_folder, qr_filename)
         img.save(qr_path)
 
-        # 5. Update users table with QR path
+        # Store relative path so template can use {{ url_for('static', filename='qrcodes/xxx.png') }}
         db_qr_path = f"qrcodes/{qr_filename}"
-        cur.execute("UPDATE users SET qr_path=%s WHERE id=%s", (db_qr_path, new_user_id))
+
+        # 5. Update QR path in users table
+        cur.execute("UPDATE users SET qr_path = %s WHERE id = %s", (db_qr_path, new_user_id))
 
         # 6. Delete from new_users
         cur.execute("DELETE FROM new_users WHERE id=%s", (user_id,))
 
+        # ✅ Commit once after all queries
         mysql.connection.commit()
+
         flash("✅ User approved successfully and QR code generated.", "success")
 
     except Exception as e:
         mysql.connection.rollback()
         flash(f"❌ Error approving user: {str(e)}", "danger")
+        print("Approve user error:", e)  # debug log
+
     finally:
         cur.close()
 
     return redirect(url_for('new_users_list'))
+
 
 
 
@@ -315,23 +329,15 @@ def logout():
     return redirect(url_for('index'))
 
 # -------- USER DASHBOARD --------
-from flask import render_template
-from flask_login import login_required, current_user
-import qrcode
-import io
-import base64
-
 @app.route('/dashboard')
 @login_required
 def user_dashboard():
-    # Generate QR using same logic as my_qr
-    user_id = current_user.id
-    qr_data = f"id:{user_id}"  # Only include ID
-    qr = qrcode.QRCode(box_size=10, border=4)
-    qr.add_data(qr_data)
+    # Generate QR code
+    qr = qrcode.QRCode(box_size=10, border=5)
+    qr.add_data(str(current_user.id))
     qr.make(fit=True)
-    img = qr.make_image(fill_color='black', back_color='white')
-
+    img = qr.make_image(fill='black', back_color='white')
+    
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     qr_code_b64 = base64.b64encode(buffer.getvalue()).decode('ascii')
@@ -339,6 +345,7 @@ def user_dashboard():
     # Fetch late mess requests
     cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cur.execute("SELECT * FROM late_mess WHERE user_id = %s ORDER BY date_requested DESC", (current_user.id,))
+
     late_requests = cur.fetchall()
     cur.close()
 
@@ -711,35 +718,26 @@ def request_late_mess():
 
 
 # -------- USER: GENERATE QR --------
-# -------- USER: GENERATE QR (by user ID) --------
-from flask import Flask, render_template, session
-import qrcode
-import io
-import base64
-
-
-
-@app.route("/my_qr")
+@app.route('/my_qr')
+@login_required
 def my_qr():
-    user_id = session.get("user_id")  # Assuming you store logged-in user's id in session
-    if not user_id:
-        return "Not logged in", 403
+    # Fetch current mess count from DB
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT mess_count FROM users WHERE id=%s", (current_user.id,))
+    data = cursor.fetchone()
+    mess_count = data['mess_count'] if data else 0
+    cursor.close()
 
-    qr_data = f"id:{user_id}"  # Only include id
+    qr_data = f"user_id:{current_user.id},email:{current_user.email},mess_count:{mess_count}"
+    
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(qr_data)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-
-    # Convert to base64 to render directly in HTML
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    qr_base64 = base64.b64encode(buffer.getvalue()).decode()
-
-    return render_template("my_qr.html", qr_data=qr_base64)
-
-
-
+    img = qr.make_image(fill='black', back_color='white')
+    img_bytes = io.BytesIO()
+    img.save(img_bytes, format='PNG')
+    img_bytes.seek(0)
+    return send_file(img_bytes, mimetype='image/png')
 
 
 # -------- ADMIN: SCAN QR AND INCREMENT MESS COUNT --------
@@ -748,16 +746,12 @@ from flask_login import login_required, current_user
 import MySQLdb.cursors
 from datetime import date, datetime
 
-
 @app.route('/admin/qr_scan')
 @login_required
 def admin_qr_scan():
     if not getattr(current_user, 'is_admin', False):
         return "Unauthorized", 403
     return render_template('admin_qr_scan.html', current_date=date.today().strftime("%Y-%m-%d"))
-
-
-
 
 
 
@@ -779,62 +773,66 @@ live_counts = {
 
 
 
-def parse_qr_data(qr_data):
-    """
-    Parse QR data format: "user_id:{id}"
-    """
-    try:
-        user_id = int(qr_data.split("user_id:")[1])
-        return {"user_id": user_id}
-    except Exception:
-        return None
-
-
-
-from flask import request, jsonify
-from datetime import datetime
-
-@app.route("/admin/scan_qr", methods=["POST"])
+@app.route('/admin/scan_qr', methods=['POST'])
+@login_required
 def scan_qr():
-    data = request.get_json()
-    user_id = data.get("user_id")
-    meal_type = data.get("meal_type")
+    if not getattr(current_user, 'is_admin', False):
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    if not user_id:
-        return jsonify({"success": False, "message": "Invalid QR code!"})
+    data = request.get_json(silent=True) or request.form
+    user_id = data.get('user_id')
+    meal_type = data.get('meal_type')
+    today = date.today()
 
-    if meal_type not in ["Breakfast", "Lunch", "Dinner"]:
-        return jsonify({"success": False, "message": "Invalid meal type!"})
+    if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
+        return jsonify({'success': False, 'message': 'Invalid data'}), 400
 
-    # Example: check if user exists
-    user = db.execute("SELECT * FROM users WHERE id=%s", (user_id,)).fetchone()
-    if not user:
-        return jsonify({"success": False, "message": "User not found!"})
+    try:
+        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-    # Example: check if already scanned today
-    today = datetime.now().date()
-    existing = db.execute(
-        "SELECT * FROM attendance WHERE user_id=%s AND meal_type=%s AND date=%s",
-        (user_id, meal_type, today)
-    ).fetchone()
-    if existing:
-        return jsonify({"success": False, "message": f"{meal_type} already recorded!"})
+        # Check duplicate scan
+        cur.execute("""
+            SELECT id FROM meal_attendance
+            WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
+        """, (user_id, meal_type, today))
+        if cur.fetchone():
+            cur.close()
+            return jsonify({'success': False, 'message': f'Already scanned for {meal_type} today'}), 400
 
-    # Insert attendance
-    db.execute(
-        "INSERT INTO attendance (user_id, meal_type, date) VALUES (%s, %s, %s)",
-        (user_id, meal_type, today)
-    )
-    db.commit()
+        # Insert attendance
+        cur.execute("""
+            INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
+            VALUES (%s, %s, %s)
+        """, (user_id, meal_type, today))
 
-    # Count live attendees for this meal
-    count = db.execute(
-        "SELECT COUNT(*) as total FROM attendance WHERE meal_type=%s AND date=%s",
-        (meal_type, today)
-    ).fetchone()["total"]
+        cur.execute("""UPDATE users SET mess_count = mess_count + 1 WHERE id = %s""", (user_id,))
+        mysql.connection.commit()
 
-    return jsonify({"success": True, "name": user["name"], "count": count})
+        # Increment temporary live counter
+        live_counts[meal_type] += 1  
 
+        # Get updated count from DB
+        cur.execute("""
+            SELECT COUNT(*) AS count FROM meal_attendance
+            WHERE meal_type=%s AND attendance_date=%s
+        """, (meal_type, today))
+        result = cur.fetchone()
+
+        cur.execute("SELECT name, course, mess_count FROM users WHERE id=%s", (user_id,))
+        user = cur.fetchone()
+        cur.close()
+
+        return jsonify({
+            'success': True,
+            'name': user['name'],
+            'course': user['course'],
+            'mess_count': user['mess_count'],
+            'count': result['count'],
+            'live_count': live_counts[meal_type]  # 🔹 return live count
+        })
+
+    except MySQLdb.Error as e:
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
 
 
 # -------- ADMIN: GET TOTAL SCAN COUNT --------
