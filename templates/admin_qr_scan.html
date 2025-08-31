@@ -13,14 +13,12 @@
       align-items: center;
       min-height: 100vh;
     }
-
     h2 {
       margin: 30px 0 15px 0;
       color: #1a1a1a;
       font-size: 2em;
       text-shadow: 1px 1px 2px #ccc;
     }
-
     #scanner-card {
       max-width: 500px;
       width: 90%;
@@ -33,11 +31,7 @@
       overflow: hidden;
       transition: transform 0.3s;
     }
-
-    #scanner-card:hover {
-      transform: translateY(-5px);
-    }
-
+    #scanner-card:hover { transform: translateY(-5px); }
     #reader {
       width: 100%;
       max-width: 400px;
@@ -47,17 +41,9 @@
       padding: 10px;
       background: #f0f7f5;
     }
-
-    #result {
-      margin-top: 15px;
-      font-size: 1.2em;
-      font-weight: bold;
-      min-height: 1.5em;
-    }
-
+    #result { margin-top: 15px; font-size: 1.2em; font-weight: bold; min-height: 1.5em; }
     .success { color: #4caf50; }
     .error { color: #f44336; }
-
     .count-box {
       margin-top: 20px;
       font-size: 1.1em;
@@ -67,7 +53,6 @@
       display: inline-block;
       box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
     }
-
     button {
       margin: 12px 8px 0 8px;
       padding: 12px 25px;
@@ -78,12 +63,7 @@
       font-weight: bold;
       transition: transform 0.2s, box-shadow 0.2s;
     }
-
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-
+    button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
     .btn-success { background: #4caf50; color: white; }
     .btn-danger { background: #f44336; color: white; }
   </style>
@@ -135,12 +115,8 @@
 
       let user_id = null;
       try {
-        const parts = decodedText.split(",");
-        for (let p of parts) {
-          if (p.startsWith("user_id:")) {
-            user_id = p.split(":")[1];
-            break;
-          }
+        if (decodedText.startsWith("user_id:")) {
+          user_id = decodedText.split(":")[1];
         }
       } catch (e) {}
 
