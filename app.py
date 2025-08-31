@@ -1165,6 +1165,32 @@ def approve_late(late_mess_id):
     except Exception as e:
         return jsonify({"success": False, "message": f"Error approving late mess: {str(e)}"}), 500
 
+
+@app.route('/admin/approve_bulk', methods=['POST'])
+@login_required
+def approve_bulk():
+    if not current_user.is_admin:
+        return "Unauthorized", 403
+
+    emails = request.json.get("emails", [])
+    if not emails:
+        return "No emails provided", 400
+
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    for email in emails:
+        cur.execute("SELECT * FROM new_users WHERE email=%s", (email,))
+        user = cur.fetchone()
+        if user:
+            # Insert into users
+            cur.execute("""
+                INSERT INTO users (name,email,phone,course,password,user_type,approved)
+                VALUES (%s,%s,%s,%s,%s,%s,1)
+            """, (user['name'], user['email'], user['phone'], user['course'], user['password'], user['user_type']))
+            cur.execute("DELETE FROM new_users WHERE email=%s", (email,))
+    mysql.connection.commit()
+    cur.close()
+    return f"Approved {len(emails)} users"
+
 # ----------------- START APP -----------------
 # ----------------- START APP -----------------
 if __name__ == '__main__':
