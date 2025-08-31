@@ -799,23 +799,34 @@ def scan_qr():
         return jsonify({"success": False, "message": "Unauthorized"}), 403
 
     data = request.get_json()
-    qr_data = data.get("qr_data", "")
+    qr_data = data.get("qr_data")
     meal_type = data.get("meal_type")
 
+    # Validate meal type
     if meal_type not in ['breakfast', 'lunch', 'dinner']:
         return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
 
+    # Parse QR
     parsed = parse_qr_data(qr_data)
     if not parsed:
         return jsonify({'success': False, 'message': 'Invalid QR code format'}), 400
 
     user_id = parsed['user_id']
+    today = datetime.now().date()
 
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Check duplicate scan today
-        today = datetime.now().date()
+        # Check if user is on mess cut
+        cur.execute("""
+            SELECT * FROM mess_cut
+            WHERE user_id=%s AND start_date <= %s AND end_date >= %s
+        """, (user_id, today, today))
+        if cur.fetchone():
+            cur.close()
+            return jsonify({'success': False, 'message': 'User is on mess cut today'}), 400
+
+        # Check if already scanned
         cur.execute("""
             SELECT id FROM meal_attendance
             WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
@@ -824,12 +835,13 @@ def scan_qr():
             cur.close()
             return jsonify({'success': False, 'message': f'Already scanned for {meal_type} today'}), 400
 
-        # Insert attendance
+        # Record attendance
         cur.execute("""
             INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
             VALUES (%s, %s, %s)
         """, (user_id, meal_type, today))
-        # Update mess_count
+
+        # Update mess count
         cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id=%s", (user_id,))
         mysql.connection.commit()
 
