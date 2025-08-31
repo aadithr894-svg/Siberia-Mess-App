@@ -40,30 +40,23 @@
     const mealTypeSpan = document.getElementById("mealType");
     let lastScanTime = 0;
 
-    // Detect current meal based on time
     function detectMeal() {
       const now = new Date();
-      const hours = now.getHours() + now.getMinutes() / 60;
-
-      if (hours >= 7 && hours <= 10) return 'Breakfast'; // 7:00–10:00
-      if (hours >= 12 && hours <= 15) return 'Lunch';    // 12:00–15:00
-      if (hours >= 19 && hours <= 22) return 'Dinner';   // 19:00–22:00
-
+      const hours = now.getHours() + now.getMinutes()/60;
+      if (hours >= 7.5 && hours <= 9) return 'Breakfast';
+      if (hours >= 12 && hours <= 14) return 'Lunch';
+      if (hours >= 19.5 && hours <= 22) return 'Dinner';
       return 'Closed';
     }
 
     function updateLiveCount() {
       const meal = detectMeal();
-      mealTypeSpan.innerText = meal === 'Closed' ? 'No Meal' : meal;
-      if (meal !== 'Closed') {
-        fetch(`/admin/live_count/${meal}`)
-          .then(res => res.json())
-          .then(data => { if (data.success) liveCount.innerText = data.count; });
-      } else {
-        liveCount.innerText = "0";
-      }
+      mealTypeSpan.innerText = meal;
+      if(meal === 'Closed') return; // Do not fetch counts if closed
+      fetch(`/admin/live_count/${meal}`)
+        .then(res => res.json())
+        .then(data => { if (data.success) liveCount.innerText = data.count; });
     }
-
     setInterval(updateLiveCount, 3000);
     updateLiveCount();
 
@@ -72,26 +65,25 @@
       if (now - lastScanTime < 2000) return;
       lastScanTime = now;
 
-      // Extract user_id from QR code
-      let user_id = null;
+      let id = null;
       try {
         const parts = decodedText.split(",");
         for (let p of parts) {
-          if (p.startsWith("user_id:")) {
-            user_id = p.split(":")[1];
+          if (p.startsWith("id:")) {
+            id = p.split(":")[1];
             break;
           }
         }
       } catch (e) {}
 
-      if (!user_id) {
+      if (!id) {
         resultDiv.innerText = "❌ Invalid QR code!";
         resultDiv.className = "error";
         return;
       }
 
       const meal = detectMeal();
-      if (meal === 'Closed') {
+      if(meal === 'Closed') {
         resultDiv.innerText = "❌ Cannot scan: not meal time!";
         resultDiv.className = "error";
         return;
@@ -100,7 +92,7 @@
       fetch("/admin/scan_qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id, meal_type: meal })
+        body: JSON.stringify({ id, meal_type: meal })
       })
       .then(res => res.json())
       .then(data => {
@@ -126,7 +118,7 @@
 
     document.getElementById("addCountBtn").addEventListener("click", () => {
       const meal = detectMeal();
-      if (meal === 'Closed') { alert("❌ Cannot add count: not meal time!"); return; }
+      if(meal === 'Closed') { alert("❌ Cannot add count: not meal time!"); return; }
       fetch("/admin/add_count", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -143,7 +135,7 @@
 
     document.getElementById("resetCountBtn").addEventListener("click", () => {
       const meal = detectMeal();
-      if (meal === 'Closed') { alert("❌ Cannot reset: not meal time!"); return; }
+      if(meal === 'Closed') { alert("❌ Cannot reset: not meal time!"); return; }
       fetch("/admin/reset_count", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
