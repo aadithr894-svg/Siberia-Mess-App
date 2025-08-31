@@ -660,41 +660,59 @@ from datetime import datetime, time
 @app.route('/request_late_mess', methods=['GET', 'POST'])
 @login_required
 def request_late_mess():
-    now_time = datetime.now().time()  # current time
-    start_time = time(16, 0)         # 4:00 PM
-    end_time = time(20, 30)          # 8:30 PM
+    from datetime import datetime, time, date
+    now = datetime.now()
+    now_time = now.time()
+    today = now.date()
+    
+    # Allowed time window: 4:00 PM - 8:30 PM
+    start_time = time(16, 0)
+    end_time = time(20, 30)
+
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     if request.method == 'POST':
+        # Check time window
         if not (start_time <= now_time <= end_time):
-            flash("Late mess can only be requested between 4:00 PM and 8:30 PM", "danger")
+            flash("Late mess can only be requested between 4:00 PM and 8:30 PM", "warning")
             return redirect(url_for('request_late_mess'))
 
-        cur = mysql.connection.cursor()
-        cur.execute(
-            "INSERT INTO late_mess(user_id, date_requested) VALUES (%s, %s)",
-            (current_user.id, datetime.now().date())
-        )
-        mysql.connection.commit()
-        cur.close()
-        flash("Late mess requested successfully", "success")
+        try:
+            # Check if already requested today
+            cur.execute("SELECT * FROM late_mess WHERE user_id=%s AND date_requested=%s", 
+                        (current_user.id, today))
+            existing = cur.fetchone()
+            if existing:
+                flash("You have already requested late mess today.", "info")
+            else:
+                # Insert new request
+                cur.execute("""
+                    INSERT INTO late_mess(user_id, date_requested, status)
+                    VALUES (%s, %s, %s)
+                """, (current_user.id, today, "pending"))
+                mysql.connection.commit()
+                flash("Late mess requested successfully!", "success")
+        except Exception as e:
+            flash(f"Error: {str(e)}", "danger")
+        finally:
+            cur.close()
         return redirect(url_for('request_late_mess'))
 
-    # Fetch user's late mess requests
-    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cur.execute(
-        "SELECT * FROM late_mess WHERE user_id=%s ORDER BY date_requested DESC",
-        (current_user.id,)
-    )
+    # GET request: fetch previous requests
+    cur.execute("SELECT * FROM late_mess WHERE user_id=%s ORDER BY date_requested DESC", (current_user.id,))
     late_requests = cur.fetchall()
     cur.close()
 
-    # Pass the current time to template
+    # Determine if button should be active
+    can_request = start_time <= now_time <= end_time
+
     return render_template(
         'request_late_mess.html',
         late_requests=late_requests,
-        now_time=now_time,
-        start_time=start_time,
-        end_time=end_time
+        can_request=can_request,
+        now_time=now_time.strftime("%H:%M"),
+        start_time=start_time.strftime("%H:%M"),
+        end_time=end_time.strftime("%H:%M")
     )
 
 
@@ -1104,15 +1122,15 @@ def admin_validate_qr():
 @app.route('/admin/late_mess_list')
 @login_required
 def late_mess_list():
-    if not current_user.is_admin:
-        return "Unauthorized", 403
+    if not getattr(current_user, 'is_admin', False):
+        flash("Unauthorized access!", "danger")
+        return redirect(url_for('admin_dashboard'))
 
-    cur = mysql.connection.cursor()
+    cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cur.execute("""
-        SELECT lm.id, u.name, u.email, lm.date_requested, lm.reason
+        SELECT lm.id, u.name, u.email, lm.date_requested, lm.reason, lm.approved
         FROM late_mess lm
         JOIN users u ON u.id = lm.user_id
-        WHERE lm.status='pending'
         ORDER BY lm.date_requested DESC
     """)
     late_mess_requests = cur.fetchall()
@@ -1124,28 +1142,31 @@ def late_mess_list():
 
 
 
-
-
-
 #Late mess rest
 
 from flask import redirect, url_for, flash
 from flask_login import login_required, current_user
 
-# Reset Late Mess
 @app.route('/admin/reset_late_mess', methods=['POST'])
 @login_required
 def reset_late_mess():
     if not current_user.is_admin:
         return "Unauthorized", 403
 
-    cur = mysql.connection.cursor()
-    cur.execute("UPDATE late_mess SET status='reset' WHERE status='pending'")
-    mysql.connection.commit()
-    cur.close()
-    
-    flash("Late mess requests have been reset.", "success")
-    return redirect(url_for('late_mess_list'))  # Correct endpoint
+    try:
+        cur = mysql.connection.cursor()
+        # Delete all late mess entries
+        cur.execute("DELETE FROM late_mess")
+        mysql.connection.commit()
+        cur.close()
+        
+        flash("✅ All late mess requests have been removed.", "success")
+        return redirect(url_for('late_mess_list'))  # admin late mess page
+    except Exception as e:
+        return f"❌ Error resetting late mess: {str(e)}", 500
+
+
+
 
 from flask import jsonify
 
