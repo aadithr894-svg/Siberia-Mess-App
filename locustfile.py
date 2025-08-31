@@ -1,49 +1,94 @@
-from locust import HttpUser, task, between
 import csv
 import random
+from locust import HttpUser, task, between
 
-# ---------------- Load users from CSV ----------------
-users = []
-with open("test_users.csv", newline="") as csvfile:
-    reader = csv.DictReader(csvfile)
+# ------------------ Load test users ------------------
+USERS = []
+with open("test_users.csv", newline="") as f:
+    reader = csv.DictReader(f)
     for row in reader:
-        users.append({
-            "email": row["email"],
-            "password": row["password"]
-        })
+        USERS.append(row)
 
-# ---------------- Random details ----------------
-def random_name():
-    first = ["John","Jane","Alice","Bob","Charlie","Diana"]
-    last = ["Smith","Doe","Brown","Johnson","Lee","Taylor"]
-    return random.choice(first)+" "+random.choice(last)
-
+# ------------------ Helper ------------------
 def random_phone():
-    return "".join(str(random.randint(0,9)) for _ in range(10))
+    return str(random.randint(6000000000, 9999999999))
 
 def random_course():
-    return random.choice(["DCS","SMS","BCA","MCA"])
+    return random.choice(["DCS", "SMS", "MCA", "BSc"])
 
-# ---------------- Locust class ----------------
+def random_user_type():
+    return "student"
+
+# ------------------ Locust User ------------------
 class MessAppUser(HttpUser):
-    wait_time = between(0.05, 0.2)  # tiny wait for high load
+    wait_time = between(1, 3)
+    
+    def on_start(self):
+        # Pick a random test user
+        self.user = random.choice(USERS)
+        self.email = self.user["email"]
+        self.password = self.user["password"]
+        self.name = f"User_{random.randint(1000,9999)}"
+        self.phone = random_phone()
+        self.course = random_course()
+        self.user_type = random_user_type()
 
+        # 1️⃣ Register
+        with self.client.post(
+            "/register",
+            data={
+                "name": self.name,
+                "email": self.email,
+                "course": self.course,
+                "phone": self.phone,
+                "password": self.password,
+                "user_type": self.user_type
+            },
+            catch_response=True
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+            else:
+                response.failure(f"Register failed: {response.text}")
+
+        # 2️⃣ Auto-approve via admin endpoint
+        # Assuming default admin exists with id=1
+        # Fetch new_user id first
+        new_user_id = None
+        r = self.client.get("/new_users", catch_response=True)
+        if r.status_code == 200:
+            # crude extraction from HTML
+            import re
+            match = re.search(r"/approve_user/(\d+)", r.text)
+            if match:
+                new_user_id = match.group(1)
+        
+        if new_user_id:
+            self.client.get(f"/approve_user/{new_user_id}", catch_response=True)
+        
+        # 3️⃣ Login
+        with self.client.post(
+            "/login",
+            data={"email": self.email, "password": self.password},
+            catch_response=True
+        ) as response:
+            if "Login successful!" in response.text:
+                response.success()
+            else:
+                response.failure("Login failed")
+
+    # ------------------ Example task ------------------
     @task
-    def register_and_bulk_approve(self):
-        # Pick a random CSV user
-        user = random.choice(users)
-
-        # 1️⃣ Register user
-        self.client.post("/register", data={
-            "name": random_name(),
-            "email": user["email"],
-            "phone": random_phone(),
-            "course": random_course(),
-            "password": user["password"],
-            "user_type": "student"
-        })
-
-        # 2️⃣ Bulk approve user (server must implement /admin/approve_bulk)
-        self.client.post("/admin/approve_bulk", json={
-            "emails": [user["email"]]  # can send a batch of emails
-        })
+    def apply_mess_cut(self):
+        from datetime import date, timedelta
+        today = date.today()
+        start_date = today + timedelta(days=2)
+        end_date = start_date + timedelta(days=3)
+        self.client.post(
+            "/apply_mess_cut",
+            data={
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat()
+            },
+            catch_response=True
+        )
