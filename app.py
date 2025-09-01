@@ -13,8 +13,11 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 # ---------------- MySQL Connection Pool ----------------
+# app.py (or wherever you configure your DB)
 import os
+from mysql.connector import pooling, Error
 
+# --- Load DB config from environment variables ---
 dbconfig = {
     "host": os.environ.get("DB_HOST"),
     "user": os.environ.get("DB_USER"),
@@ -23,12 +26,27 @@ dbconfig = {
     "port": int(os.environ.get("DB_PORT", 3306))
 }
 
-mysql_pool = pooling.MySQLConnectionPool(
-    pool_name="mypool",
-    pool_size=5,            # adjust based on traffic
-    pool_reset_session=True,
-    **dbconfig
-)
+# --- Setup MySQL connection pool ---
+try:
+    mysql_pool = pooling.MySQLConnectionPool(
+        pool_name="mypool",
+        pool_size=10,          # number of connections in the pool
+        pool_reset_session=True,
+        **dbconfig
+    )
+    print("✅ MySQL connection pool created successfully")
+except Error as e:
+    print(f"❌ Error creating MySQL connection pool: {e}")
+    raise
+
+# --- Helper function to get connection ---
+def get_db_connection():
+    try:
+        return mysql_pool.get_connection()
+    except Error as e:
+        print(f"❌ Error getting connection from pool: {e}")
+        raise
+
 
 # ---------------- LOGIN MANAGER ----------------
 login_manager = LoginManager()
