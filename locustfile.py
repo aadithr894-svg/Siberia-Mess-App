@@ -10,7 +10,6 @@ class UserBehavior(TaskSet):
     def on_start(self):
         self.admin_email = "siberiamess4@gmail.com"
         self.admin_password = "siberia@123"
-        self.new_users = []
 
     def admin_login(self):
         # GET login page to fetch CSRF token
@@ -35,7 +34,7 @@ class UserBehavior(TaskSet):
 
     @task
     def register_approve_and_scan_qr(self):
-        # Step 1: Register random user
+        # Step 1: Register a single user
         name = fake.name()
         email = fake.unique.email()
         phone = "".join([str(random.randint(0, 9)) for _ in range(10)])
@@ -53,7 +52,6 @@ class UserBehavior(TaskSet):
         }, allow_redirects=True)
 
         if resp.status_code == 200:
-            self.new_users.append(email)
             print(f"✅ Registered: {email}")
         else:
             print(f"❌ Registration failed: {email}")
@@ -63,29 +61,26 @@ class UserBehavior(TaskSet):
         if not self.admin_login():
             return
 
-        # Step 3: Approve users
-        for u_email in self.new_users:
-            approve_resp = self.client.post("/admin/approve_bulk",
-                json={"emails": [u_email]},
-                headers={"Content-Type": "application/json"}
-            )
-            if approve_resp.status_code == 200:
-                print(f"✅ Approved: {u_email}")
-            else:
-                print(f"❌ Failed to approve: {u_email}")
+        # Step 3: Approve the user
+        approve_resp = self.client.post("/admin/approve_bulk",
+            json={"emails": [email]},
+            headers={"Content-Type": "application/json"}
+        )
+        if approve_resp.status_code == 200:
+            print(f"✅ Approved: {email}")
+        else:
+            print(f"❌ Failed to approve: {email}")
+            return
 
-        # Step 4: Simulate QR scanning
-        for u_email in self.new_users:
-            scan_resp = self.client.post("/scan_qr", data={
-                "email": u_email,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            })
-            if scan_resp.status_code == 200:
-                print(f"✅ QR scanned for {u_email}")
-            else:
-                print(f"❌ QR scan failed for {u_email}")
-
-        self.new_users.clear()
+        # Step 4: Scan QR for the user
+        scan_resp = self.client.post("/scan_qr", data={
+            "email": email,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        if scan_resp.status_code == 200:
+            print(f"✅ QR scanned for {email}")
+        else:
+            print(f"❌ QR scan failed for {email}")
 
 
 class WebsiteUser(HttpUser):
