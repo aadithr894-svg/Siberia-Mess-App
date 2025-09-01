@@ -66,7 +66,7 @@ setInterval(updateLiveCount, 120000); // 2 min
 // Handle QR scan success
 function onScanSuccess(decodedText) {
   const now = Date.now();
-  if (now - lastScanTime < 800) return; // throttle 0.2 sec
+  if (now - lastScanTime < 1500) return; // throttle 0.2 sec
   lastScanTime = now;
 
   let user_id = null;
@@ -114,7 +114,7 @@ function onScanFailure(error) {} // ignore failed scans
 const html5QrCode = new Html5Qrcode("reader");
 html5QrCode.start(
   { facingMode: "environment" },
-  { fps: 60, qrbox: 150, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
+  { fps: 30, qrbox: 200, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
   onScanSuccess,
   onScanFailure
 );
