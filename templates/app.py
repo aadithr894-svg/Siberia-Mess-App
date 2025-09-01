@@ -755,13 +755,20 @@ def admin_qr_scan():
 
 
 
-from flask import jsonify, request
+from flask import Flask, render_template, request, jsonify
 from flask_login import login_required, current_user
 from datetime import date
 import MySQLdb.cursors
 
-# In-memory live count cache
-live_counts = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
+# 🔹 Temporary in-memory storage for live counts
+live_counts = {
+    "breakfast": 0,
+    "lunch": 0,
+    "dinner": 0
+}
+
+
+
 
 @app.route('/admin/scan_qr', methods=['POST'])
 @login_required
@@ -780,44 +787,59 @@ def scan_qr():
     try:
         cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Use INSERT IGNORE to skip duplicates (make sure DB has UNIQUE(user_id, meal_type, attendance_date))
+        # 🔹 Check if user has an active mess cut today
         cur.execute("""
-            INSERT IGNORE INTO meal_attendance (user_id, meal_type, attendance_date)
-            VALUES (%s, %s, %s)
-        """, (user_id, meal_type, today))
+            SELECT * FROM mess_cut
+            WHERE user_id=%s AND start_date <= %s AND end_date >= %s
+        """, (user_id, today, today))
+        if cur.fetchone():
+            cur.close()
+            return jsonify({'success': False, 'message': 'User has a mess cut today. Scan not allowed.'}), 403
 
-        # Check if new row was inserted
-        if cur.rowcount == 0:
+        # Check duplicate scan
+        cur.execute("""
+            SELECT id FROM meal_attendance
+            WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
+        """, (user_id, meal_type, today))
+        if cur.fetchone():
             cur.close()
             return jsonify({'success': False, 'message': f'Already scanned for {meal_type} today'}), 400
 
-        # Update user's mess_count in one query
-        cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id=%s", (user_id,))
-
-        # Fetch user info and total count in a single query
+        # Insert attendance
         cur.execute("""
-            SELECT u.name, u.course, u.mess_count, 
-                   (SELECT COUNT(*) FROM meal_attendance 
-                    WHERE meal_type=%s AND attendance_date=%s) AS count
-            FROM users u WHERE u.id=%s
-        """, (meal_type, today, user_id))
+            INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
+            VALUES (%s, %s, %s)
+        """, (user_id, meal_type, today))
+
+        cur.execute("""UPDATE users SET mess_count = mess_count + 1 WHERE id = %s""", (user_id,))
+        mysql.connection.commit()
+
+        # Increment temporary live counter
+        live_counts[meal_type] += 1  
+
+        # Get updated count from DB
+        cur.execute("""
+            SELECT COUNT(*) AS count FROM meal_attendance
+            WHERE meal_type=%s AND attendance_date=%s
+        """, (meal_type, today))
+        result = cur.fetchone()
+
+        cur.execute("SELECT name, course, mess_count FROM users WHERE id=%s", (user_id,))
         user = cur.fetchone()
         cur.close()
-
-        # Update in-memory live count
-        live_counts[meal_type] += 1
 
         return jsonify({
             'success': True,
             'name': user['name'],
             'course': user['course'],
             'mess_count': user['mess_count'],
-            'count': user['count'],
-            'live_count': live_counts[meal_type]
+            'count': result['count'],
+            'live_count': live_counts[meal_type]  # 🔹 return live count
         })
 
     except MySQLdb.Error as e:
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+
 
 # -------- ADMIN: VIEW CONFIRMED QR COUNTS --------
 @app.route('/admin/qr_scan_counts')

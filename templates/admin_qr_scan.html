@@ -58,13 +58,13 @@
         .then(res => res.json())
         .then(data => { if (data.success) liveCount.innerText = data.count; });
     }
-    setInterval(updateLiveCount, 3000);
+    setInterval(updateLiveCount, 120000);
     updateLiveCount();
 
     // Scan success
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      if (now - lastScanTime < 2000) return; // throttle
+      if (now - lastScanTime < 1000) return; // throttle
       lastScanTime = now;
 
       let user_id = null;
@@ -105,7 +105,7 @@
     function onScanFailure(error){}
 
     // Start QR scanner
-    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: 250 });
     html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 
     // ➕ Add Count
