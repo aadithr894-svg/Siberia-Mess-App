@@ -1,6 +1,6 @@
 from locust import HttpUser, TaskSet, task, between
 from faker import Faker
-from datetime import datetime, timedelta
+from datetime import datetime
 import random
 from bs4 import BeautifulSoup
 
@@ -13,13 +13,13 @@ class UserBehavior(TaskSet):
         self.new_users = []
 
     def admin_login(self):
-        # Step 1: GET login page to fetch CSRF token
+        # GET login page to fetch CSRF token
         resp = self.client.get("/login")
         soup = BeautifulSoup(resp.text, "html.parser")
         csrf_token_input = soup.find("input", {"name": "csrf_token"})
         csrf_token = csrf_token_input["value"] if csrf_token_input else ""
 
-        # Step 2: POST login with CSRF
+        # POST login with CSRF token
         login_resp = self.client.post("/login", data={
             "email": self.admin_email,
             "password": self.admin_password,
@@ -34,14 +34,14 @@ class UserBehavior(TaskSet):
             return False
 
     @task
-    def register_and_approve(self):
+    def register_approve_and_scan_qr(self):
         # Step 1: Register random user
         name = fake.name()
         email = fake.unique.email()
         phone = "".join([str(random.randint(0, 9)) for _ in range(10)])
         course = random.choice(["DCS", "SMS", "MBA"])
         password = "password123"
-        user_type = "outmess"  # ✅ User type is outmess
+        user_type = "outmess"
 
         resp = self.client.post("/register", data={
             "name": name,
@@ -74,16 +74,16 @@ class UserBehavior(TaskSet):
             else:
                 print(f"❌ Failed to approve: {u_email}")
 
-        # Step 4: Apply random mess cut (min 3 days)
+        # Step 4: Simulate QR scanning
         for u_email in self.new_users:
-            start_date = datetime.today() + timedelta(days=random.randint(1, 10))
-            end_date = start_date + timedelta(days=random.randint(3, 7))
-
-            self.client.post("/apply_mess_cut", data={
-                "start_date": start_date.strftime("%Y-%m-%d"),
-                "end_date": end_date.strftime("%Y-%m-%d")
+            scan_resp = self.client.post("/scan_qr", data={
+                "email": u_email,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
-            print(f"✅ Applied mess cut for {u_email} from {start_date.date()} to {end_date.date()}")
+            if scan_resp.status_code == 200:
+                print(f"✅ QR scanned for {u_email}")
+            else:
+                print(f"❌ QR scan failed for {u_email}")
 
         self.new_users.clear()
 
