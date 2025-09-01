@@ -1,28 +1,54 @@
 {% extends 'base.html' %}
 {% block content %}
-<div style="text-align:center; padding: 30px; font-family: Arial, sans-serif;">
+<div class="dashboard text-center p-4">
 
-    <h2 style="color: #2c3e50; margin-bottom: 20px;">Welcome, <span style="color: #e67e22;">{{ current_user.name }}</span>!</h2>
+    <!-- Welcome -->
+    <h2 class="fw-bold mb-4 text-dark">
+        Welcome, <span class="text-primary">{{ current_user.name }}</span>!
+    </h2>
 
-    <div style="display: inline-block; background: #f9f9f9; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 30px;">
-        <h3 style="color: #34495e;">Your QR Code</h3>
-        <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code" style="width:200px; height:200px; margin: 15px 0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-        <br>
-        <a class="btn" href="{{ url_for('my_qr') }}" style="display:inline-block; padding: 10px 20px; margin-top: 10px; background-color: #e67e22; color: white; text-decoration:none; border-radius: 8px; transition: 0.3s;">Download QR Code</a>
-    </div>
+    <!-- Actions -->
+    <h4 class="fw-semibold mb-3 text-secondary">Quick Actions</h4>
 
-    <h3 style="color: #34495e; margin-bottom: 15px;">Actions</h3>
-    <div style="display:flex; justify-content:center; gap: 20px; flex-wrap: wrap;">
-        <a class="btn" href="{{ url_for('apply_mess_cut') }}" style="padding: 12px 25px; background-color: #3498db; color:white; text-decoration:none; border-radius:10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: 0.3s;">Apply Mess Cut</a>
-        <a class="btn" href="{{ url_for('request_late_mess') }}" style="padding: 12px 25px; background-color: #1abc9c; color:white; text-decoration:none; border-radius:10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: 0.3s;">Request Late Mess</a>
+    <div class="d-flex flex-column flex-md-row justify-content-center align-items-center gap-3">
+        <!-- My QR First -->
+        <a href="{{ url_for('my_qr') }}" 
+           class="btn btn-lg w-100 w-md-auto"
+           style="background-color:#e67e22; color:white; border-radius:12px; font-weight:600;">
+            📲 My QR Code
+        </a>
+
+        <!-- Apply Mess Cut -->
+        <a href="{{ url_for('apply_mess_cut') }}" 
+           class="btn btn-lg w-100 w-md-auto"
+           style="background-color:#3498db; color:white; border-radius:12px; font-weight:600;">
+            ✂️ Apply Mess Cut
+        </a>
+
+        <!-- Request Late Mess -->
+        <a href="{{ url_for('request_late_mess') }}" 
+           class="btn btn-lg w-100 w-md-auto"
+           style="background-color:#1abc9c; color:white; border-radius:12px; font-weight:600;">
+            🍽️ Request Late Mess
+        </a>
     </div>
 
 </div>
 
 <style>
+    .dashboard {
+        font-family: 'Poppins', sans-serif;
+    }
     .btn:hover {
         transform: translateY(-3px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        box-shadow: 0 6px 14px rgba(0,0,0,0.15);
+        transition: all 0.3s ease;
+    }
+    @media (max-width: 768px) {
+        .btn {
+            font-size: 1rem;
+            padding: 12px;
+        }
     }
 </style>
 {% endblock %}

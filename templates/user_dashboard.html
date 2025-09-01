@@ -11,16 +11,11 @@
         table, th, td { border: 1px solid black; }
         th, td { padding: 10px; text-align: center; }
         .message { color: red; margin-top: 10px; }
-        #qrCode { margin-top: 20px; }
     </style>
 </head>
 <body>
 
 <h1>Welcome, {{ current_user.name }}</h1>
-
-<!-- QR Code Section -->
-<h2>Your Mess QR Code</h2>
-<img id="qrCode" src="data:image/png;base64,{{ qrcodes }}" alt="Your QR Code">
 
 <!-- Mess Cut Application -->
 <h2>Apply for Mess Cut</h2>
