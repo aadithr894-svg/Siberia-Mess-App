@@ -823,25 +823,37 @@ def scan_qr():
 from flask import render_template
 from datetime import date
 
-@app.route("/admin/qr_scan_counts")
+from flask import render_template
+from datetime import date
+
+@app.route('/admin/qr_scan_counts')
 @login_required
 def qr_scan_counts():
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT attendance_date, meal_type, COUNT(*) as count FROM meal_attendance GROUP BY attendance_date, meal_type")
-    rows = cur.fetchall()
-
     counts_by_date = {}
-    for row in rows:
-        # convert row['attendance_date'] to string 'YYYY-MM-DD'
-        d = row['attendance_date'].strftime('%Y-%m-%d') if isinstance(row['attendance_date'], date) else str(row['attendance_date'])
-        if d not in counts_by_date:
-            counts_by_date[d] = {}
-        counts_by_date[d][row['meal_type']] = row['count']
+    try:
+        cur = mysql.connection.cursor()
+        # ✅ Use meal_counts table (admin-added counts only)
+        cur.execute("""
+            SELECT meal_date, meal_type, total_people
+            FROM confirmed_meal_counts
+            ORDER BY meal_date DESC
+        """)
+        rows = cur.fetchall()
+        cur.close()
 
-    today_str = date.today().strftime('%Y-%m-%d')
-    return render_template("admin_meal_count.html", counts_by_date=counts_by_date, today=today_str)
+        for row in rows:
+            date_str = row[0].strftime("%Y-%m-%d") if hasattr(row[0], 'strftime') else str(row[0])
+            meal = row[1]
+            count = row[2]
 
+            if date_str not in counts_by_date:
+                counts_by_date[date_str] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
+            counts_by_date[date_str][meal] = count
 
+    except Exception as e:
+        flash(f"Error fetching counts: {e}", "danger")
+    
+    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
 
 # Temporary live counters (resettable anytime)
 live_counts = {"breakfast": 0, "lunch": 0, "dinner": 0}
