@@ -110,8 +110,8 @@
 
     // Faster scanner
     const html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-      fps: 30, // high FPS
-      qrbox: { width: 300, height: 300 },
+      fps: 60, // high FPS
+      qrbox: { width: 200, height: 200 },
       experimentalFeatures: { useBarCodeDetectorIfSupported: true }
     });
     html5QrcodeScanner.render(onScanSuccess, onScanFailure);
