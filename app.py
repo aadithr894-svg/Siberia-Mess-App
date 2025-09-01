@@ -996,7 +996,7 @@ def qr_scan_counts():
         cur.close()
         conn.close()  # Return connection to pool
 
-    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
+
     from calendar import month_name
     from datetime import datetime
 
