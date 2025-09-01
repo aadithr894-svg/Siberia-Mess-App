@@ -4,9 +4,20 @@
 
   <h2 class="mb-4 text-center">📊 Daily Meal Attendance</h2>
 
+  <!-- Month Filter -->
+  <div class="mb-3 text-center">
+    <label for="monthFilter" class="form-label me-2">Filter by Month:</label>
+    <select id="monthFilter" class="form-select d-inline-block w-auto">
+      <option value="all">All</option>
+      {% for month in months %}
+      <option value="{{ month.value }}">{{ month.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
   <!-- Historical Counts Table -->
   <div class="table-responsive">
-    <table class="table table-bordered table-striped">
+    <table class="table table-bordered table-striped" id="attendanceTable">
       <thead class="table-dark">
         <tr>
           <th>Date</th>
@@ -17,7 +28,7 @@
       </thead>
       <tbody>
         {% for date_key, meals in counts_by_date|dictsort(reverse=True) %}
-        <tr>
+        <tr data-month="{{ date_key[:7] }}">
           <td>{{ date_key }}</td>
           <td>{{ meals.get('breakfast', 0) }}</td>
           <td>{{ meals.get('lunch', 0) }}</td>
@@ -30,16 +41,30 @@
 
 </div>
 
-<!-- Auto refresh counts every 2 minutes -->
+<!-- Auto refresh and month filter -->
 <script>
+  const monthFilter = document.getElementById('monthFilter');
+  const tableRows = document.querySelectorAll('#attendanceTable tbody tr');
+
+  monthFilter.addEventListener('change', () => {
+    const selectedMonth = monthFilter.value;
+    tableRows.forEach(row => {
+      const rowMonth = row.getAttribute('data-month'); // format: YYYY-MM
+      if (selectedMonth === 'all' || rowMonth === selectedMonth) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  });
+
+  // Auto-refresh counts every 2 minutes (optional, can update table dynamically)
   setInterval(() => {
-    fetch("/admin/qr_scan_counts_json")  // separate route returning JSON of counts
+    fetch("/admin/qr_scan_counts_json")
       .then(res => res.json())
       .then(data => {
-        // Optional: If you want, update the table dynamically
-        // Otherwise, you can refresh page to see updated counts
         console.log("Counts updated:", data);
       });
-  }, 120000); // 2 minutes
+  }, 120000);
 </script>
 {% endblock %}
