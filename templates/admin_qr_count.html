@@ -1,16 +1,6 @@
 {% extends 'base.html' %}
 
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Meal Counts</title>
-<script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 font-sans">
-
+{% block content %}
 <div class="max-w-6xl mx-auto p-6">
 
   <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">📊 Admin Meal Counts</h1>
@@ -63,7 +53,7 @@
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-gray-200">
-        {% for date, meals in counts_by_date.items() %}
+        {% for date, meals in counts_by_date.items()|sort(reverse=True) %}
         <tr class="hover:bg-gray-50">
           <td class="px-6 py-4 whitespace-nowrap">{{ date }}</td>
           <td class="px-6 py-4 whitespace-nowrap">{{ meals.get('breakfast', 0) }}</td>
@@ -88,6 +78,4 @@
     });
   });
 </script>
-
-</body>
-</html>
+{% endblock %}
