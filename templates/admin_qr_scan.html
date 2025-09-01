@@ -2,17 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin QR Scanner</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-blue-50 min-h-screen flex items-center justify-center p-4 font-sans">
+<body class="bg-gradient-to-b from-blue-100 to-blue-50 min-h-screen flex items-center justify-center p-4 font-sans">
 
-  <div class="w-full max-w-md bg-white rounded-xl shadow-lg p-6">
-    <h2 class="text-center text-2xl font-bold text-blue-700 mb-4">📡 Admin QR Scanner</h2>
+  <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+    <h2 class="text-center text-3xl font-bold text-blue-700 mb-2">📡 Admin QR Scanner</h2>
+    <p class="text-center text-gray-600 mb-4">Scan QR codes quickly to mark attendance</p>
 
     <!-- QR Scanner -->
-    <div id="reader" class="mx-auto mb-4"></div>
+    <div id="reader" class="w-full mb-4 rounded-xl overflow-hidden shadow-inner"></div>
 
     <!-- Result message -->
     <div id="result" class="text-center text-lg font-semibold mb-4 text-gray-700">
@@ -20,16 +22,16 @@
     </div>
 
     <!-- Live count box -->
-    <div class="text-center bg-blue-100 text-blue-700 rounded-lg p-3 mb-4">
+    <div class="text-center bg-gradient-to-r from-blue-200 to-blue-300 text-blue-900 rounded-xl p-4 font-bold text-lg">
       🍽️ Live Count (<span id="mealType"></span>): <span id="liveCount">0</span>
     </div>
 
     <!-- Buttons -->
-    <div class="flex justify-between gap-2">
-      <button id="addCountBtn" class="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+    <div class="flex flex-col sm:flex-row gap-2">
+      <button id="addCountBtn" class="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-lg">
         ➕ Add Count
       </button>
-      <button id="resetCountBtn" class="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-semibold">
+      <button id="resetCountBtn" class="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold transition-all shadow-lg">
         🔄 Reset
       </button>
     </div>
@@ -41,7 +43,7 @@
     const mealTypeSpan = document.getElementById("mealType");
     let lastScanTime = 0;
 
-    // Auto-detect meal based on current time
+    // Auto-detect meal
     function detectMeal() {
       const now = new Date();
       const hours = now.getHours() + now.getMinutes()/60;
@@ -50,26 +52,23 @@
       return 'dinner';
     }
 
-    // Update live count from server
+    // Update live count
     function updateLiveCount() {
       const meal = detectMeal();
       mealTypeSpan.innerText = meal;
       fetch(`/admin/live_count/${meal}`)
         .then(res => res.json())
-        .then(data => { 
-          if (data.success) liveCount.innerText = data.count; 
-        })
+        .then(data => { if (data.success) liveCount.innerText = data.count; })
         .catch(()=>{ liveCount.innerText = "0"; });
     }
 
-    // Run once and then every 2 minutes
     updateLiveCount();
-    setInterval(updateLiveCount, 120000);
+    setInterval(updateLiveCount, 60000); // every 1 min
 
-    // Handle successful QR scan
+    // Scan success
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      if (now - lastScanTime < 1000) return; // throttle 1 scan/sec
+      if (now - lastScanTime < 300) return; // throttle 0.3 sec
       lastScanTime = now;
 
       let user_id = null;
@@ -109,8 +108,12 @@
 
     function onScanFailure(error){}
 
-    // Start QR scanner with optimized settings
-    const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+    // Faster scanner
+    const html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+      fps: 30, // high FPS
+      qrbox: { width: 300, height: 300 },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    });
     html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 
     // Add Count manually
@@ -145,5 +148,6 @@
       });
     });
   </script>
+
 </body>
 </html>
