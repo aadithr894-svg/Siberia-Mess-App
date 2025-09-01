@@ -172,26 +172,28 @@
         <img src="{{ url_for('static', filename='Images/logo.webp') }}" alt="Siberia Mess Logo">
         Siberia Mess
     </div>
-    <div class="nav-links">
-        {% if current_user.is_authenticated %}
-            {% if current_user.is_admin %}
-                <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
-                <a href="{{ url_for('users_list') }}">Users List</a>
-                <a href="{{ url_for('new_users_list') }}">New Users</a>
-                <a href="{{ url_for('mess_cut_list') }}">Mess Cuts</a>
-                <a href="{{ url_for('late_mess_list') }}">Late Mess</a>
-            {% else %}
-                <a href="{{ url_for('user_dashboard') }}">Dashboard</a>
-                <a href="{{ url_for('apply_mess_cut') }}">Apply Mess Cut</a>
-                <a href="{{ url_for('request_late_mess') }}">Request Late Mess</a>
-                <a href="{{ url_for('my_qr') }}">My QR Code</a>
-            {% endif %}
-            <a href="{{ url_for('logout') }}">Logout</a>
+<div class="nav-links">
+    {% if current_user.is_authenticated %}
+        {% if current_user.is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('users_list') }}">Users List</a>
+            <a href="{{ url_for('new_users_list') }}">New Users</a>
+            <a href="{{ url_for('mess_cut_list') }}">Mess Cuts</a>
+            <a href="{{ url_for('late_mess_list') }}">Late Mess</a>
+            <a href="{{ url_for('mess_menu') }}">Mess Menu</a>  <!-- New Option -->
         {% else %}
-            <a href="{{ url_for('login') }}">Login</a>
-            <a href="{{ url_for('register') }}">Register</a>
+            <a href="{{ url_for('user_dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('apply_mess_cut') }}">Apply Mess Cut</a>
+            <a href="{{ url_for('request_late_mess') }}">Request Late Mess</a>
+            <a href="{{ url_for('my_qr') }}">My QR Code</a>
+            <a href="{{ url_for('mess_menu') }}">Mess Menu</a>  <!-- New Option -->
         {% endif %}
-    </div>
+        <a href="{{ url_for('logout') }}">Logout</a>
+    {% else %}
+        <a href="{{ url_for('login') }}">Login</a>
+        <a href="{{ url_for('register') }}">Register</a>
+    {% endif %}
+</div>
 </nav>
 
 <!-- Main content -->

@@ -1233,6 +1233,29 @@ def approve_bulk():
     cur.close()
     return f"Approved {len(emails)} users"
 
+@app.route("/mess_menu")
+@login_required
+def mess_menu():
+    days = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"]
+
+    # Load from DB (example fallback if empty)
+    menu = {day: {"breakfast":"-", "lunch":"-", "dinner":"-"} for day in days}
+
+    # TODO: Fetch real menu from DB here
+
+    return render_template("mess_menu.html", days=days, menu=menu)
+
+@app.route("/update_menu", methods=["POST"])
+@login_required
+def update_menu():
+    if not current_user.is_admin:
+        return jsonify({"message": "Unauthorized"}), 403
+
+    data = request.get_json()
+    # TODO: Save `data` into DB
+    return jsonify({"message": "Menu updated successfully!"})
+
+
 # ----------------- START APP -----------------
 # ----------------- START APP -----------------
 if __name__ == '__main__':
