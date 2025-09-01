@@ -2,27 +2,38 @@
 {% block content %}
 <h2 class="text-center mb-4 fw-bold text-primary">🍴 Weekly Mess Menu</h2>
 
-<div class="table-wrapper">
-    <table class="table text-center align-middle mess-menu">
-        <thead>
-            <tr>
-                <th>Day</th>
-                <th>🥞 Breakfast</th>
-                <th>🥗 Lunch</th>
-                <th>🍽️ Dinner</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for day in days %}
-            <tr>
-                <td class="day-col">{{ day.capitalize() }}</td>
-                <td class="meal-cell breakfast" contenteditable="{{ 'true' if current_user.is_admin else 'false' }}" data-label="Breakfast">{{ menu[day]['breakfast'] }}</td>
-                <td class="meal-cell lunch" contenteditable="{{ 'true' if current_user.is_admin else 'false' }}" data-label="Lunch">{{ menu[day]['lunch'] }}</td>
-                <td class="meal-cell dinner" contenteditable="{{ 'true' if current_user.is_admin else 'false' }}" data-label="Dinner">{{ menu[day]['dinner'] }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="accordion" id="messMenuAccordion">
+    {% for day in days %}
+    <div class="accordion-item shadow-sm mb-3 rounded-3 border-0">
+        <h2 class="accordion-header" id="heading-{{ day }}">
+            <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ day }}" aria-expanded="false" aria-controls="collapse-{{ day }}">
+                {{ day.capitalize() }}
+            </button>
+        </h2>
+        <div id="collapse-{{ day }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ day }}" data-bs-parent="#messMenuAccordion">
+            <div class="accordion-body">
+                <div class="card border-0 mb-2">
+                    <div class="card-body meal-card breakfast">
+                        <h6 class="fw-bold text-secondary">🥞 Breakfast</h6>
+                        <p class="meal-text" contenteditable="{{ 'true' if current_user.is_admin else 'false' }}">{{ menu[day]['breakfast'] }}</p>
+                    </div>
+                </div>
+                <div class="card border-0 mb-2">
+                    <div class="card-body meal-card lunch">
+                        <h6 class="fw-bold text-secondary">🥗 Lunch</h6>
+                        <p class="meal-text" contenteditable="{{ 'true' if current_user.is_admin else 'false' }}">{{ menu[day]['lunch'] }}</p>
+                    </div>
+                </div>
+                <div class="card border-0">
+                    <div class="card-body meal-card dinner">
+                        <h6 class="fw-bold text-secondary">🍽️ Dinner</h6>
+                        <p class="meal-text" contenteditable="{{ 'true' if current_user.is_admin else 'false' }}">{{ menu[day]['dinner'] }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
 </div>
 
 {% if current_user.is_admin %}
@@ -32,19 +43,17 @@
 
 <script>
 document.getElementById("saveMenuBtn").addEventListener("click", function() {
-    const table = document.querySelector("table");
     const days = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
     const meals = ["breakfast","lunch","dinner"];
     let updatedMenu = {};
 
-    for (let i = 1; i <= days.length; i++) {
-        const row = table.rows[i];
-        let day = days[i-1];
+    days.forEach(day => {
         updatedMenu[day] = {};
-        meals.forEach((meal, j) => {
-            updatedMenu[day][meal] = row.cells[j+1].innerText.trim();
+        meals.forEach(meal => {
+            const el = document.querySelector(`#collapse-${day} .${meal} .meal-text`);
+            updatedMenu[day][meal] = el.innerText.trim();
         });
-    }
+    });
 
     fetch("{{ url_for('update_menu') }}", {
         method: "POST",
@@ -59,130 +68,59 @@ document.getElementById("saveMenuBtn").addEventListener("click", function() {
 {% endif %}
 
 <style>
-/* Base table */
-.mess-menu {
-    border-collapse: separate;
-    border-spacing: 0 12px;
-    width: 100%;
+.accordion-button {
     font-family: 'Poppins', sans-serif;
+    font-size: 1rem;
+    background: #f4f9ff;
+    color: #2c3e50;
+    border-radius: 8px !important;
+    transition: all 0.2s ease;
 }
 
-/* Table headers */
-.mess-menu thead th {
+.accordion-button:not(.collapsed) {
     background: #3498db;
     color: #fff;
-    font-weight: 600;
-    padding: 14px;
-    border: none;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-radius: 10px 10px 0 0;
-    font-size: 0.95rem;
+    box-shadow: none;
 }
 
-/* Row cards */
-.mess-menu tbody tr {
+.meal-card {
     background: #fff;
-    border-radius: 12px;
+    border-radius: 10px;
+    padding: 12px 16px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    overflow: hidden;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.mess-menu tbody tr:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+.meal-card h6 {
+    margin-bottom: 6px;
 }
 
-/* Table cells */
-.mess-menu td {
-    padding: 14px;
-    border: none;
+.meal-text {
+    margin: 0;
     font-size: 0.95rem;
     color: #444;
+    min-height: 24px;
+    cursor: default;
 }
 
-/* Day column */
-.day-col {
-    font-weight: 700;
-    font-size: 1.05rem;
-    color: #2c3e50;
-    letter-spacing: 0.5px;
-}
-
-/* Editable cells */
-.mess-menu td[contenteditable="true"] {
+.meal-text[contenteditable="true"] {
     cursor: text;
     border-radius: 6px;
-    font-weight: 400;
-    color: #555;
-    transition: background 0.2s ease, box-shadow 0.2s ease;
+    padding: 4px 6px;
+    transition: background 0.2s ease;
 }
 
-.mess-menu td[contenteditable="true"]:hover {
+.meal-text[contenteditable="true"]:hover {
     background-color: #f9f9f9;
 }
 
-.mess-menu td[contenteditable="true"]:focus {
+.meal-text[contenteditable="true"]:focus {
     outline: 2px solid #3498db;
     background-color: #eef7ff;
-    box-shadow: inset 0 0 6px rgba(52,152,219,0.2);
 }
 
-/* Meal color accents */
-.breakfast {
-    background: #fffaf2;
-}
-.lunch {
-    background: #f7fff5;
-}
-.dinner {
-    background: #f9f7ff;
-}
-
-/* Mobile responsive cards */
-@media (max-width: 768px) {
-    .mess-menu, .mess-menu thead, .mess-menu tbody, .mess-menu th, .mess-menu td, .mess-menu tr {
-        display: block;
-        width: 100%;
-    }
-
-    .mess-menu thead {
-        display: none;
-    }
-
-    .mess-menu tbody tr {
-        margin-bottom: 1.5rem;
-        border-radius: 12px;
-        overflow: hidden;
-    }
-
-    .mess-menu td {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 16px;
-        border-bottom: 1px solid #f0f0f0;
-        font-size: 0.95rem;
-    }
-
-    .mess-menu td:last-child {
-        border-bottom: none;
-    }
-
-    .mess-menu td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        color: #3498db;
-        margin-right: 10px;
-    }
-
-    .day-col {
-        font-size: 1.2rem;
-        background: #f4faff;
-        padding: 14px;
-        color: #2c3e50;
-    }
-}
+/* Subtle background per meal */
+.breakfast { background: #fffaf2; }
+.lunch { background: #f7fff5; }
+.dinner { background: #f9f7ff; }
 </style>
 {% endblock %}
