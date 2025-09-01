@@ -19,11 +19,11 @@ from mysql.connector import pooling, Error
 
 # --- Load DB config from environment variables ---
 dbconfig = {
-    "host": os.environ.get("DB_HOST"),
-    "user": os.environ.get("DB_USER"),
-    "password": os.environ.get("DB_PASS"),
-    "database": os.environ.get("DB_NAME"),
-    "port": int(os.environ.get("DB_PORT", 3306))
+    "host": os.environ.get("MYSQL_HOST"),
+    "user": os.environ.get("MYSQL_USER"),
+    "password": os.environ.get("MYSQL_PASSWORD"),
+    "database": os.environ.get("MYSQL_DB"),
+    "port": int(os.environ.get("MYSQL_PORT", 3306))
 }
 
 # --- Setup MySQL connection pool ---
