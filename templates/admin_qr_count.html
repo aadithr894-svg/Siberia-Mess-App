@@ -38,7 +38,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for date_key, meals in counts_by_date.items()|sort %}
+        {% for date_key, meals in counts_by_date|dictsort(reverse=True) %}
         <tr>
           <td>{{ date_key }}</td>
           <td>{{ meals.get('breakfast', 0) }}</td>
@@ -55,7 +55,7 @@
 <!-- Auto refresh today counts every 2 minutes -->
 <script>
   setInterval(() => {
-    fetch("/admin/qr_scan_counts_json")  // create a separate route returning JSON of today's counts
+    fetch("/admin/qr_scan_counts_json")  // separate route returning JSON of today's counts
       .then(res => res.json())
       .then(data => {
         document.getElementById('breakfastCount').innerText = data.breakfast || 0;

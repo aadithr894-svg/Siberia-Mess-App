@@ -982,7 +982,7 @@ def qr_scan_counts():
         rows = cur.fetchall()
 
         for row in rows:
-            date_str = row[0].strftime("%Y-%m-%d")  # meal_date
+            date_str = row[0].strftime("%d-%m-%Y")  # Changed format to DD-MM-YYYY
             meal = row[1]                           # meal_type
             count = row[2]                          # total_count
 
@@ -994,7 +994,7 @@ def qr_scan_counts():
         flash(f"Error fetching counts: {e}", "danger")
     finally:
         cur.close()
-        conn.close()                           # Return connection to pool
+        conn.close()  # Return connection to pool
 
     return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
 
