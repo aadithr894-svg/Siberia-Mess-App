@@ -14,19 +14,19 @@
             <div class="accordion-body">
                 <div class="card border-0 mb-2">
                     <div class="card-body meal-card breakfast">
-                        <h6 class="fw-bold text-secondary">🥞 Breakfast</h6>
+                        <h6 class="fw-bold text-secondary"> Breakfast</h6>
                         <p class="meal-text" contenteditable="{{ 'true' if current_user.is_admin else 'false' }}">{{ menu[day]['breakfast'] }}</p>
                     </div>
                 </div>
                 <div class="card border-0 mb-2">
                     <div class="card-body meal-card lunch">
-                        <h6 class="fw-bold text-secondary">🥗 Lunch</h6>
+                        <h6 class="fw-bold text-secondary"> Lunch</h6>
                         <p class="meal-text" contenteditable="{{ 'true' if current_user.is_admin else 'false' }}">{{ menu[day]['lunch'] }}</p>
                     </div>
                 </div>
                 <div class="card border-0">
                     <div class="card-body meal-card dinner">
-                        <h6 class="fw-bold text-secondary">🍽️ Dinner</h6>
+                        <h6 class="fw-bold text-secondary"> Dinner</h6>
                         <p class="meal-text" contenteditable="{{ 'true' if current_user.is_admin else 'false' }}">{{ menu[day]['dinner'] }}</p>
                     </div>
                 </div>
