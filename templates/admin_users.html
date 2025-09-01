@@ -34,7 +34,7 @@
                      aria-expanded="false" 
                      aria-controls="collapseMobile{{ user.id }}" 
                      style="cursor: pointer;">
-                    <h5 class="mb-0">{{ user.name }}</h5>
+                    <h5 class="mb-0">{{ loop.index }}. {{ user.name }}</h5> <!-- Serial number -->
                     <span class="badge 
                         {% if user.user_type == 'outmess' %} bg-warning text-dark
                         {% elif user.user_type == 'guest' %} bg-info text-dark
@@ -46,6 +46,7 @@
 
                 <!-- Desktop: always shown -->
                 <div class="d-none d-md-block card-inner p-3">
+                    <p class="mb-1"><strong>Serial:</strong> {{ loop.index }}</p>
                     <p class="mb-1"><strong>ID:</strong> {{ user.id }}</p>
                     <p class="mb-1"><strong>Email:</strong> {{ user.email }}</p>
                     <p class="mb-1"><strong>Course:</strong> {{ user.course }}</p>
@@ -59,6 +60,7 @@
                 <!-- Mobile: collapsible content -->
                 <div class="collapse d-md-none" id="collapseMobile{{ user.id }}">
                     <div class="card-inner p-3">
+                        <p class="mb-1"><strong>Serial:</strong> {{ loop.index }}</p>
                         <p class="mb-1"><strong>ID:</strong> {{ user.id }}</p>
                         <p class="mb-1"><strong>Email:</strong> {{ user.email }}</p>
                         <p class="mb-1"><strong>Course:</strong> {{ user.course }}</p>
