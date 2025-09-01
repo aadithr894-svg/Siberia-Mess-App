@@ -41,7 +41,7 @@
     const mealTypeSpan = document.getElementById("mealType");
     let lastScanTime = 0;
 
-    // Auto-detect meal
+    // Auto-detect meal based on current time
     function detectMeal() {
       const now = new Date();
       const hours = now.getHours() + now.getMinutes()/60;
@@ -50,21 +50,26 @@
       return 'dinner';
     }
 
-    // Update live count
+    // Update live count from server
     function updateLiveCount() {
       const meal = detectMeal();
       mealTypeSpan.innerText = meal;
       fetch(`/admin/live_count/${meal}`)
         .then(res => res.json())
-        .then(data => { if (data.success) liveCount.innerText = data.count; });
+        .then(data => { 
+          if (data.success) liveCount.innerText = data.count; 
+        })
+        .catch(()=>{ liveCount.innerText = "0"; });
     }
-    setInterval(updateLiveCount, 120000);
-    updateLiveCount();
 
-    // Scan success
+    // Run once and then every 2 minutes
+    updateLiveCount();
+    setInterval(updateLiveCount, 120000);
+
+    // Handle successful QR scan
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      if (now - lastScanTime < 1000) return; // throttle
+      if (now - lastScanTime < 1000) return; // throttle 1 scan/sec
       lastScanTime = now;
 
       let user_id = null;
@@ -104,11 +109,11 @@
 
     function onScanFailure(error){}
 
-    // Start QR scanner
-    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: 250 });
+    // Start QR scanner with optimized settings
+    const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
     html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 
-    // ➕ Add Count
+    // Add Count manually
     document.getElementById("addCountBtn").addEventListener("click", () => {
       const meal = detectMeal();
       fetch("/admin/add_count", {
@@ -123,7 +128,7 @@
       });
     });
 
-    // 🔄 Reset
+    // Reset Count
     document.getElementById("resetCountBtn").addEventListener("click", () => {
       const meal = detectMeal();
       fetch("/admin/reset_count", {
