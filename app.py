@@ -1575,6 +1575,11 @@ def update_menu():
             conn.close()
         return jsonify({"message": f"Database error: {str(e)}"}), 500
 
+from calendar import month_name
+from datetime import datetime
+
+months = [{'value': f"{datetime.now().year}-{i:02}", 'name': month_name[i]} for i in range(1,13)]
+return render_template("admin_qr_count.html", counts_by_date=counts_by_date, months=months)
 
 
 # ----------------- START APP -----------------
