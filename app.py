@@ -1238,12 +1238,22 @@ def approve_bulk():
 def mess_menu():
     days = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"]
 
-    # Load from DB (example fallback if empty)
-    menu = {day: {"breakfast":"-", "lunch":"-", "dinner":"-"} for day in days}
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT day, meal_type, item FROM mess_menu")
+    rows = cursor.fetchall()
 
-    # TODO: Fetch real menu from DB here
+    # default menu
+    menu = {day: {"breakfast": "", "lunch": "", "dinner": ""} for day in days}
 
-    return render_template("mess_menu.html", days=days, menu=menu)
+    # fill with DB values
+    for row in rows:
+        day, meal_type, item = row
+        menu[day][meal_type] = item
+
+    cursor.close()
+
+    return render_template("mess_menu.html", menu=menu, days=days)
+
 
 @app.route("/update_menu", methods=["POST"])
 @login_required
@@ -1252,8 +1262,22 @@ def update_menu():
         return jsonify({"message": "Unauthorized"}), 403
 
     data = request.get_json()
-    # TODO: Save `data` into DB
-    return jsonify({"message": "Menu updated successfully!"})
+
+    cursor = mysql.connection.cursor()
+
+    for day, meals in data.items():
+        for meal_type, item in meals.items():
+            cursor.execute("""
+                INSERT INTO mess_menu (day, meal_type, item)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE item = VALUES(item)
+            """, (day, meal_type, item))
+
+    mysql.connection.commit()
+    cursor.close()
+
+    return jsonify({"message": "Menu updated successfully ✅"})
+
 
 
 # ----------------- START APP -----------------
