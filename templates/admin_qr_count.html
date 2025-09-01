@@ -4,28 +4,6 @@
 
   <h2 class="mb-4 text-center">📊 Daily Meal Attendance</h2>
 
-  <!-- Today's Counts Cards -->
-  <div class="row mb-4">
-    <div class="col-md-4 mb-2">
-      <div class="card text-white bg-success text-center p-3">
-        <h4>🍳 Breakfast</h4>
-        <p class="display-4" id="breakfastCount">{{ counts_by_date[today]['breakfast'] if today in counts_by_date else 0 }}</p>
-      </div>
-    </div>
-    <div class="col-md-4 mb-2">
-      <div class="card text-white bg-primary text-center p-3">
-        <h4>🍲 Lunch</h4>
-        <p class="display-4" id="lunchCount">{{ counts_by_date[today]['lunch'] if today in counts_by_date else 0 }}</p>
-      </div>
-    </div>
-    <div class="col-md-4 mb-2">
-      <div class="card text-white bg-warning text-center p-3">
-        <h4>🍽 Dinner</h4>
-        <p class="display-4" id="dinnerCount">{{ counts_by_date[today]['dinner'] if today in counts_by_date else 0 }}</p>
-      </div>
-    </div>
-  </div>
-
   <!-- Historical Counts Table -->
   <div class="table-responsive">
     <table class="table table-bordered table-striped">
@@ -52,16 +30,16 @@
 
 </div>
 
-<!-- Auto refresh today counts every 2 minutes -->
+<!-- Auto refresh counts every 2 minutes -->
 <script>
   setInterval(() => {
-    fetch("/admin/qr_scan_counts_json")  // separate route returning JSON of today's counts
+    fetch("/admin/qr_scan_counts_json")  // separate route returning JSON of counts
       .then(res => res.json())
       .then(data => {
-        document.getElementById('breakfastCount').innerText = data.breakfast || 0;
-        document.getElementById('lunchCount').innerText = data.lunch || 0;
-        document.getElementById('dinnerCount').innerText = data.dinner || 0;
+        // Optional: If you want, update the table dynamically
+        // Otherwise, you can refresh page to see updated counts
+        console.log("Counts updated:", data);
       });
-  }, 120000); // 120000 ms = 2 minutes
+  }, 120000); // 2 minutes
 </script>
 {% endblock %}
