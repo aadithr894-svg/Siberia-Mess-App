@@ -845,13 +845,9 @@ from datetime import date
 @app.route('/admin/qr_scan_counts')
 @login_required
 def qr_scan_counts():
-    if not current_user.is_admin:
-        flash("Unauthorized", "danger")
-        return redirect(url_for('user_dashboard'))
-
     counts_by_date = {}
     try:
-        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cur = mysql.connection.cursor()
         cur.execute("""
             SELECT meal_date, meal_type, total_count
             FROM daily_meal_attendance
@@ -861,9 +857,9 @@ def qr_scan_counts():
         cur.close()
 
         for row in rows:
-            date_str = row['meal_date'].strftime("%Y-%m-%d")
-            meal = row['meal_type']
-            count = row['total_count']
+            date_str = row[0].strftime("%Y-%m-%d")  # row[0] = meal_date
+            meal = row[1]                           # row[1] = meal_type
+            count = row[2]                          # row[2] = total_count
 
             if date_str not in counts_by_date:
                 counts_by_date[date_str] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
@@ -873,6 +869,7 @@ def qr_scan_counts():
         flash(f"Error fetching counts: {e}", "danger")
     
     return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
+
 
 # Temporary live counters (resettable anytime)
 live_counts = {"breakfast": 0, "lunch": 0, "dinner": 0}
