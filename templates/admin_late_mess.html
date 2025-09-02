@@ -10,53 +10,27 @@
             <tr>
                 <th>Name</th>
                 <th>Email</th>
+                <th>Course</th>
+                <th>User Type</th>
                 <th>Date Requested</th>
-                <th>Reason</th>
                 <th>Status</th>
-                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for req in late_mess_requests %}
-            <tr id="row-{{ req.id }}">
+            <tr>
                 <td>{{ req.name }}</td>
                 <td>{{ req.email }}</td>
+                <td>{{ req.course }}</td>
+                <td>{{ req.user_type }}</td>
                 <td>{{ req.date_requested }}</td>
-                <td>{{ req.reason or 'N/A' }}</td>
-                <td id="status-{{ req.id }}">
-                    {% if req.status == 'approved' %}
-                        <span class="badge bg-success">Approved</span>
-                    {% else %}
-                        <span class="badge bg-warning">Pending</span>
-                    {% endif %}
-                </td>
-                <td id="action-{{ req.id }}">
-                    {% if req.status != 'approved' %}
-                        <button class="btn btn-success btn-sm" onclick="approveLate({{ req.id }})">Approve</button>
-                    {% endif %}
-                </td>
+                <td>{{ req.status }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     {% else %}
-    <div class="alert alert-info mt-3">
-        No late mess requests found.
-    </div>
+    <p>No late mess requests yet.</p>
     {% endif %}
 </div>
-
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script>
-function approveLate(id) {
-    $.post("/admin/approve_late/" + id)
-    .done(function() {
-        $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
-        $("#action-" + id).html('');
-    })
-    .fail(function() {
-        alert("❌ Error approving late mess!");
-    });
-}
-</script>
 {% endblock %}
