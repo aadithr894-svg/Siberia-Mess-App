@@ -18,7 +18,7 @@ class UserRegistration(TaskSet):
         phone = "".join([str(random.randint(0, 9)) for _ in range(10)])
         course = random.choice(["DCS", "SMS", "MBA"])
         user_type = "outmess"
-
+        food_type="Veg"
         resp = self.client.post("/register", data={
             "name": name,
             "email": email,
