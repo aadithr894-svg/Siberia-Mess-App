@@ -61,12 +61,12 @@ function updateLiveCount() {
     .catch(()=>{ liveCount.innerText = "0"; });
 }
 updateLiveCount();
-setInterval(updateLiveCount, 120000); // 2 min
+setInterval(updateLiveCount, 240000); // 2 min
 
 // Handle QR scan success
 function onScanSuccess(decodedText) {
   const now = Date.now();
-  if (now - lastScanTime < 1500) return; // throttle 0.2 sec
+  if (now - lastScanTime < 1200) return; // throttle 0.2 sec
   lastScanTime = now;
 
   let user_id = null;

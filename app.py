@@ -141,9 +141,10 @@ def register():
         phone = request.form['phone']
         password = request.form['password']
         user_type = request.form['user_type']  # student or admin
+        food_type = request.form['food_type']  # veg or non-veg  ✅
 
         # Basic required fields check
-        if not name or not email or not password or not user_type:
+        if not name or not email or not password or not user_type or not food_type:
             flash("All fields are required.", "danger")
             return redirect(url_for('register'))
 
@@ -153,25 +154,25 @@ def register():
             return redirect(url_for('register'))
 
         # ---------------- POOL CONNECTION ----------------
-        conn = mysql_pool.get_connection()         # Get connection from pool
-        cur = conn.cursor(dictionary=True)         # DictCursor equivalent
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor(dictionary=True)
 
         # Hash the password
         hashed_password = generate_password_hash(password)
 
         try:
-            # Insert into new_users table
+            # Insert into new_users table (added food_type)
             cur.execute("""
-                INSERT INTO new_users (name, email, phone, course, password, user_type)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (name, email, phone, course, hashed_password, user_type))
+                INSERT INTO new_users (name, email, phone, course, password, user_type, food_type)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (name, email, phone, course, hashed_password, user_type, food_type))
             conn.commit()
             flash("Registration successful! Await admin approval.", "success")
         except Exception as e:
             flash(f"Database error: {e}", "danger")
         finally:
             cur.close()
-            conn.close()  # Return connection to pool
+            conn.close()
 
         return redirect(url_for('login'))
 
