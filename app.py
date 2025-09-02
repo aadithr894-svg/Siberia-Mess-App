@@ -1421,25 +1421,19 @@ def late_mess_list():
         return redirect(url_for('admin_dashboard'))
 
     try:
-        conn = mysql_pool.get_connection()
+        conn = mysql_pool.get_connection()                  # ✅ Get connection from pool
         cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
-        # ✅ Ensure names/emails are always returned (even if user is missing)
         cur.execute("""
-            SELECT lm.id, 
-                   COALESCE(u.name, 'Unknown') AS name,
-                   COALESCE(u.email, 'N/A') AS email,
-                   lm.date_requested, 
-                   lm.reason, 
-                   lm.status
+            SELECT lm.id, u.name, u.email, lm.date_requested, lm.reason, lm.status
             FROM late_mess lm
-            LEFT JOIN users u ON u.id = lm.user_id
+            JOIN users u ON u.id = lm.user_id
             ORDER BY lm.date_requested DESC
         """)
         late_mess_requests = cur.fetchall()
 
         cur.close()
-        conn.close()
+        conn.close()                                       # ✅ Return connection to pool
 
         return render_template('admin_late_mess.html', late_mess_requests=late_mess_requests)
 
@@ -1450,6 +1444,8 @@ def late_mess_list():
             conn.close()
         flash(f"Database error: {str(e)}", "danger")
         return redirect(url_for('admin_dashboard'))
+
+
 
 
 # ---------------- ADMIN: Reset all late mess entries ----------------
