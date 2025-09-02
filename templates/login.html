@@ -5,65 +5,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mess Login</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body {
-      font-family: 'Roboto', sans-serif;
-      background: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .card {
-      background: rgba(255,255,255,0.8);
-      backdrop-filter: blur(10px);
-      padding: 2rem;
-      border-radius: 1rem;
-      width: 22rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    }
-    .flash {
-      padding: 0.75rem 1rem;
-      border-radius: 0.5rem;
-      margin-bottom: 1rem;
-      font-weight: 500;
-      text-align: center;
-    }
-    .flash-danger { background-color: #e74c3c; color: white; }
-    .flash-warning { background-color: #f39c12; color: white; }
-    .flash-success { background-color: #27ae60; color: white; }
-    .flash-info { background-color: #3498db; color: white; }
-  </style>
 </head>
-<body>
-  <div class="card">
-    <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
+<body class="flex items-center justify-center min-h-screen font-sans 
+             bg-gradient-to-br from-blue-200 via-blue-300 to-blue-400">
+
+  <div class="bg-white shadow-xl rounded-3xl w-96 p-8 space-y-6">
+    <h2 class="text-3xl font-bold text-center text-gray-800">Login</h2>
 
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
           {% if category in ['danger', 'warning', 'success', 'info'] %}
-            <div class="flash flash-{{ category }}">{{ message }}</div>
+            <div class="text-white font-medium text-center rounded-lg p-3 
+                        {% if category=='danger' %} bg-red-500 {% endif %}
+                        {% if category=='warning' %} bg-yellow-500 {% endif %}
+                        {% if category=='success' %} bg-green-500 {% endif %}
+                        {% if category=='info' %} bg-blue-500 {% endif %}">
+              {{ message }}
+            </div>
           {% endif %}
         {% endfor %}
       {% endif %}
     {% endwith %}
 
     <form method="POST" action="{{ url_for('login') }}" class="space-y-4">
-      <div>
-        <input type="email" name="email" placeholder="Email" required class="w-full p-2 rounded border">
+      <div class="relative">
+        <input type="email" name="email" placeholder=" " required 
+               class="peer w-full p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+        <label class="absolute left-3 top-3 text-gray-400 text-sm transition-all 
+                      peer-placeholder-shown:top-3 peer-placeholder-shown:text-gray-400 
+                      peer-placeholder-shown:text-sm peer-focus:-top-2 peer-focus:text-indigo-500 peer-focus:text-xs">
+          Email
+        </label>
       </div>
-      <div>
-        <input type="password" name="password" placeholder="Password" required class="w-full p-2 rounded border">
+
+      <div class="relative">
+        <input type="password" name="password" placeholder=" " required 
+               class="peer w-full p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+        <label class="absolute left-3 top-3 text-gray-400 text-sm transition-all 
+                      peer-placeholder-shown:top-3 peer-placeholder-shown:text-gray-400 
+                      peer-placeholder-shown:text-sm peer-focus:-top-2 peer-focus:text-indigo-500 peer-focus:text-xs">
+          Password
+        </label>
       </div>
-      <button type="submit" class="w-full p-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">Login</button>
+
+      <button type="submit" 
+              class="w-full py-3 bg-indigo-500 text-white font-semibold rounded-xl hover:bg-indigo-600 transition duration-300">
+        Login
+      </button>
     </form>
 
-    <p class="mt-4 text-center text-gray-700 text-sm">
+    <p class="text-center text-gray-600 text-sm mt-4">
       Don't have an account? 
-      <a href="{{ url_for('register') }}" class="text-indigo-500 hover:underline">Sign Up</a>
+      <a href="{{ url_for('register') }}" class="text-indigo-500 font-medium hover:underline">Sign Up</a>
     </p>
   </div>
+
 </body>
 </html>
