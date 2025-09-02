@@ -5,8 +5,8 @@
     <h2>Late Mess Requests</h2>
 
     {% if late_mess_requests %}
-    <table class="table table-bordered mt-3">
-        <thead class="thead-light">
+    <table class="table table-bordered table-hover mt-3">
+        <thead class="thead-dark">
             <tr>
                 <th>Name</th>
                 <th>Email</th>
@@ -17,20 +17,34 @@
             </tr>
         </thead>
         <tbody>
-            {% for req in late_mess_requests %}
+            {% for lm in late_mess_requests %}
             <tr>
-                <td>{{ req.name }}</td>
-                <td>{{ req.email }}</td>
-                <td>{{ req.course }}</td>
-                <td>{{ req.user_type }}</td>
-                <td>{{ req.date_requested }}</td>
-                <td>{{ req.status }}</td>
+                <td>{{ lm.name }}</td>
+                <td>{{ lm.email }}</td>
+                <td>{{ lm.course }}</td>
+                <td>{{ lm.user_type }}</td>
+                <td>
+                    {% if lm.date_requested %}
+                        {{ lm.date_requested.strftime("%d-%m-%Y %H:%M") }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% if lm.status == "approved" %}
+                        <span class="badge bg-success">Approved</span>
+                    {% else %}
+                        <span class="badge bg-warning">Pending</span>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     {% else %}
-    <p>No late mess requests yet.</p>
+    <div class="alert alert-info mt-3">
+        No late mess requests yet.
+    </div>
     {% endif %}
 </div>
 {% endblock %}
