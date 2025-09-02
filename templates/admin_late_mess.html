@@ -1,52 +1,48 @@
 {% extends "admin_base.html" %}
 
 {% block content %}
-<div class="container mx-auto mt-4 px-2 sm:px-4">
-    <h2 class="text-2xl font-bold mb-4 text-center sm:text-left">Late Mess Requests</h2>
+<div class="container mt-4">
+    <h2>Late Mess Requests</h2>
 
     {% if late_mess_requests %}
-    <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border rounded-lg shadow-sm text-sm sm:text-base">
-            <thead class="bg-indigo-500 text-white">
-                <tr>
-                    <th class="py-2 px-2 sm:px-4 text-left">Name</th>
-                    <th class="py-2 px-2 sm:px-4 text-left">Email</th>
-                    <th class="py-2 px-2 sm:px-4 text-left">Food Type</th>
-                    <th class="py-2 px-2 sm:px-4 text-left">Date Requested</th>
-                    <th class="py-2 px-2 sm:px-4 text-left">Reason</th>
-                    <th class="py-2 px-2 sm:px-4 text-left">Status</th>
-                    <th class="py-2 px-2 sm:px-4 text-left">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for req in late_mess_requests %}
-                <tr id="row-{{ req.id }}" class="border-b hover:bg-gray-50">
-                    <td class="py-2 px-2 sm:px-4">{{ req.name }}</td>
-                    <td class="py-2 px-2 sm:px-4">{{ req.email }}</td>
-                    <td class="py-2 px-2 sm:px-4">{{ req.food_type or 'N/A' }}</td>
-                    <td class="py-2 px-2 sm:px-4">{{ req.date_requested }}</td>
-                    <td class="py-2 px-2 sm:px-4">{{ req.reason or 'N/A' }}</td>
-                    <td id="status-{{ req.id }}" class="py-2 px-2 sm:px-4">
-                        {% if req.status == 'approved' %}
-                            <span class="bg-green-500 text-white px-2 py-1 rounded text-xs sm:text-sm">Approved</span>
-                        {% else %}
-                            <span class="bg-yellow-400 text-white px-2 py-1 rounded text-xs sm:text-sm">Pending</span>
-                        {% endif %}
-                    </td>
-                    <td id="action-{{ req.id }}" class="py-2 px-2 sm:px-4">
-                        {% if req.status != 'approved' %}
-                            <button class="bg-green-500 text-white px-3 py-1 rounded text-xs sm:text-sm w-full sm:w-auto" onclick="approveLate({{ req.id }})">
-                                Approve
-                            </button>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <table class="table table-bordered mt-3">
+        <thead class="thead-light">
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Food Type</th>
+                <th>Date Requested</th>
+                <th>Reason</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in late_mess_requests %}
+            <tr id="row-{{ req.id }}">
+                <td>{{ req.name }}</td>
+                <td>{{ req.email }}</td>
+                <td>{{ req.food_type or 'N/A' }}</td>
+                <td>{{ req.date_requested }}</td>
+                <td>{{ req.reason or 'N/A' }}</td>
+                <td id="status-{{ req.id }}">
+                    {% if req.status == 'approved' %}
+                        <span class="badge bg-success">Approved</span>
+                    {% else %}
+                        <span class="badge bg-warning">Pending</span>
+                    {% endif %}
+                </td>
+                <td id="action-{{ req.id }}">
+                    {% if req.status != 'approved' %}
+                        <button class="btn btn-success btn-sm" onclick="approveLate({{ req.id }})">Approve</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
     {% else %}
-    <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded mt-3 text-center sm:text-left">
+    <div class="alert alert-info mt-3">
         No late mess requests found.
     </div>
     {% endif %}
@@ -56,8 +52,8 @@
 <script>
 function approveLate(id) {
     $.post("/admin/approve_late/" + id)
-    .done(function() {
-        $("#status-" + id).html('<span class="bg-green-500 text-white px-2 py-1 rounded text-xs sm:text-sm">Approved</span>');
+    .done(function(data) {
+        $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
         $("#action-" + id).html('');
     })
     .fail(function() {
