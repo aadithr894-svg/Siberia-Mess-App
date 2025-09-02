@@ -1,62 +1,101 @@
-{% extends "admin_base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Late Mess Requests</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .flash {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-weight: 500;
+      text-align: center;
+    }
+    .flash-success { background-color: #27ae60; color: white; }
+    .flash-danger { background-color: #e74c3c; color: white; }
+    .flash-warning { background-color: #f39c12; color: white; }
+  </style>
+</head>
+<body class="bg-gray-100 p-6">
 
-{% block content %}
-<div class="container mt-4">
-    <h2>Late Mess Requests</h2>
+  <div class="max-w-5xl mx-auto">
+
+    <h2 class="text-2xl font-bold mb-6">Late Mess Requests</h2>
+
+    <!-- Flask Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
 
     {% if late_mess_requests %}
-    <table class="table table-bordered mt-3">
-        <thead class="thead-light">
-            <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Date Requested</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for req in late_mess_requests %}
-            <tr id="row-{{ req.id }}">
-                <td>{{ req.name }}</td>
-                <td>{{ req.email }}</td>
-                <td>{{ req.date_requested }}</td>
-                <td>{{ req.reason or 'N/A' }}</td>
-                <td id="status-{{ req.id }}">
-                    {% if req.status == 'approved' %}
-                        <span class="badge bg-success">Approved</span>
-                    {% else %}
-                        <span class="badge bg-warning">Pending</span>
-                    {% endif %}
-                </td>
-                <td id="action-{{ req.id }}">
-                    {% if req.status != 'approved' %}
-                        <button class="btn btn-success btn-sm" onclick="approveLate({{ req.id }})">Approve</button>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
+    <table class="min-w-full bg-white border rounded-lg overflow-hidden" id="late-mess-table">
+      <thead class="bg-indigo-500 text-white">
+        <tr>
+          <th class="py-2 px-4">Name</th>
+          <th class="py-2 px-4">Email</th>
+          <th class="py-2 px-4">Date Requested</th>
+          <th class="py-2 px-4">Reason</th>
+          <th class="py-2 px-4">Status</th>
+          <th class="py-2 px-4">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lm in late_mess_requests %}
+        <tr id="late-mess-{{ lm.id }}" class="border-b">
+          <td class="py-2 px-4">{{ lm.name }}</td>
+          <td class="py-2 px-4">{{ lm.email }}</td>
+          <td class="py-2 px-4">{{ lm.date_requested }}</td>
+          <td class="py-2 px-4">{{ lm.reason or 'N/A' }}</td>
+          <td class="py-2 px-4" id="status-{{ lm.id }}">
+            {% if lm.status == 'approved' %}
+              <span class="text-green-600 font-semibold">Approved</span>
+            {% else %}
+              <span class="text-yellow-600 font-semibold">Pending</span>
+            {% endif %}
+          </td>
+          <td class="py-2 px-4" id="action-{{ lm.id }}">
+            {% if lm.status != 'approved' %}
+            <button class="approve-btn bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600" 
+                    data-id="{{ lm.id }}">
+              Approve
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
     {% else %}
-    <div class="alert alert-info mt-3">
-        No late mess requests found.
-    </div>
+      <div class="alert alert-info mt-3">No late mess requests found.</div>
     {% endif %}
-</div>
+  </div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-function approveLate(id) {
-    $.post("/admin/approve_late/" + id)
-    .done(function() {
-        $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
-        $("#action-" + id).html('');
-    })
-    .fail(function() {
-        alert("❌ Error approving late mess!");
+document.querySelectorAll('.approve-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        const lmId = this.getAttribute('data-id');
+        fetch(`/admin/approve_late/${lmId}`, { method: "POST" })
+            .then(response => {
+                if (response.ok) {
+                    document.getElementById(`status-${lmId}`).innerHTML =
+                      '<span class="text-green-600 font-semibold">Approved</span>';
+                    document.getElementById(`action-${lmId}`).innerHTML = '';
+                } else {
+                    alert("❌ Error approving late mess!");
+                }
+            })
+            .catch(err => {
+                alert("Error approving late mess: " + err);
+            });
     });
-}
+});
 </script>
-{% endblock %}
+
+</body>
+</html>

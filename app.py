@@ -1421,19 +1421,25 @@ def late_mess_list():
         return redirect(url_for('admin_dashboard'))
 
     try:
-        conn = mysql_pool.get_connection()                  # ✅ Get connection from pool
+        conn = mysql_pool.get_connection()
         cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
+        # ✅ Ensure names/emails are always returned (even if user is missing)
         cur.execute("""
-            SELECT lm.id, u.name, u.email, lm.date_requested, lm.reason, lm.status
+            SELECT lm.id, 
+                   COALESCE(u.name, 'Unknown') AS name,
+                   COALESCE(u.email, 'N/A') AS email,
+                   lm.date_requested, 
+                   lm.reason, 
+                   lm.status
             FROM late_mess lm
-            JOIN users u ON u.id = lm.user_id
+            LEFT JOIN users u ON u.id = lm.user_id
             ORDER BY lm.date_requested DESC
         """)
         late_mess_requests = cur.fetchall()
 
         cur.close()
-        conn.close()                                       # ✅ Return connection to pool
+        conn.close()
 
         return render_template('admin_late_mess.html', late_mess_requests=late_mess_requests)
 
