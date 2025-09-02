@@ -1424,12 +1424,10 @@ def late_mess_list():
 
     try:
         conn = mysql_pool.get_connection()
-        cur = conn.cursor(dictionary=True)  # DictCursor to get dicts
+        cur = conn.cursor(dictionary=True)
 
-        # Join users table to get name/email/etc
         cur.execute("""
-            SELECT lm.id, u.name, u.email, u.course, u.user_type,
-                   lm.date_requested, lm.reason, lm.status
+            SELECT lm.id, u.name, u.email, u.food_type, lm.date_requested, lm.reason, lm.status
             FROM late_mess lm
             JOIN users u ON u.id = lm.user_id
             ORDER BY lm.date_requested DESC
@@ -1448,6 +1446,7 @@ def late_mess_list():
             conn.close()
         flash(f"Database error: {e}", "danger")
         return redirect(url_for('admin_dashboard'))
+
 
 
 
