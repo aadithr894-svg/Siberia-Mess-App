@@ -25,7 +25,9 @@ class UserRegistration(TaskSet):
             "phone": phone,
             "course": course,
             "password": self.password,
-            "user_type": user_type
+            "user_type": user_type,
+        
+            "food_type":food_type
         }, allow_redirects=True)
 
         if resp.status_code == 200:
