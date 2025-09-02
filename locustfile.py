@@ -20,7 +20,7 @@ class WebsiteUser(HttpUser):
         phone = "".join([str(random.randint(0, 9)) for _ in range(10)])
         course = random.choice(["DCS", "SMS", "MBA"])
         user_type = "outmess"
-
+        food_type="Veg"
         reg_resp = self.client.post("/register", data={
             "name": name,
             "email": email,
@@ -28,6 +28,7 @@ class WebsiteUser(HttpUser):
             "course": course,
             "password": self.fixed_password,
             "user_type": user_type
+            "food_type":food_type
         }, allow_redirects=True)
 
         if reg_resp.status_code == 200:
