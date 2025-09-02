@@ -123,7 +123,7 @@
 
       // If it's 10 PM or later, tomorrow is not selectable
       if (now.getHours() >= 22) {
-        minStartDate.setDate(now.getDate() + 1); // day after tomorrow
+        minStartDate.setDate(now.getDate() + 2); // day after tomorrow
       }
       const minStartDateStr = minStartDate.toISOString().split('T')[0];
       startInput.min = minStartDateStr;
