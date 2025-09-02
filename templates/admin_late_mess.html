@@ -5,20 +5,22 @@
     <h2>Late Mess Requests</h2>
 
     {% if late_mess_requests %}
-    <table class="table table-bordered table-hover mt-3">
-        <thead class="thead-dark">
+    <table class="table table-bordered mt-3">
+        <thead class="thead-light">
             <tr>
                 <th>Name</th>
                 <th>Email</th>
                 <th>Course</th>
                 <th>User Type</th>
                 <th>Date Requested</th>
+                <th>Reason</th>
                 <th>Status</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for lm in late_mess_requests %}
-            <tr>
+            <tr id="row-{{ lm.id }}">
                 <td>{{ lm.name }}</td>
                 <td>{{ lm.email }}</td>
                 <td>{{ lm.course }}</td>
@@ -30,11 +32,17 @@
                         N/A
                     {% endif %}
                 </td>
-                <td>
-                    {% if lm.status == "approved" %}
+                <td>{{ lm.reason or 'N/A' }}</td>
+                <td id="status-{{ lm.id }}">
+                    {% if lm.status == 'approved' %}
                         <span class="badge bg-success">Approved</span>
                     {% else %}
                         <span class="badge bg-warning">Pending</span>
+                    {% endif %}
+                </td>
+                <td id="action-{{ lm.id }}">
+                    {% if lm.status != 'approved' %}
+                        <button class="btn btn-success btn-sm" onclick="approveLate({{ lm.id }})">Approve</button>
                     {% endif %}
                 </td>
             </tr>
@@ -43,8 +51,22 @@
     </table>
     {% else %}
     <div class="alert alert-info mt-3">
-        No late mess requests yet.
+        No late mess requests found.
     </div>
     {% endif %}
 </div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+function approveLate(id) {
+    $.post("/admin/approve_late/" + id)
+    .done(function() {
+        $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
+        $("#action-" + id).html('');
+    })
+    .fail(function() {
+        alert("❌ Error approving late mess!");
+    });
+}
+</script>
 {% endblock %}
