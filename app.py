@@ -977,14 +977,21 @@ def qr_scan_counts():
         cur.execute("""
             SELECT meal_date, meal_type, total_count
             FROM daily_meal_attendance
-            ORDER BY meal_date ASC   -- 👈 oldest first (calendar way)
+            ORDER BY meal_date ASC   -- calendar order
         """)
         rows = cur.fetchall()
 
         for row in rows:
-            date_obj = row[0]          # this is a date/datetime from MySQL
-            meal = row[1]              # meal_type
-            count = row[2]             # total_count
+            date_obj = row[0]          # might be date/datetime OR string
+            meal = row[1]
+            count = row[2]
+
+            # Ensure we always have a date object
+            from datetime import datetime, date
+            if isinstance(date_obj, str):
+                date_obj = datetime.strptime(date_obj, "%Y-%m-%d").date()
+            elif isinstance(date_obj, datetime):
+                date_obj = date_obj.date()  # strip time if needed
 
             if date_obj not in counts_by_date:
                 counts_by_date[date_obj] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
@@ -1001,11 +1008,12 @@ def qr_scan_counts():
 
     months = [{'value': f"{datetime.now().year}-{i:02}", 'name': month_name[i]} for i in range(1, 13)]
 
-    # ✅ Sort ascending (calendar way)
+    # Sort ascending
     sorted_counts = []
-    for date_obj, meals in sorted(counts_by_date.items(), key=lambda x: x[0], reverse=False):
+    for date_obj, meals in sorted(counts_by_date.items(), key=lambda x: x[0]):
         sorted_counts.append({
-            "date": date_obj.strftime("%d-%m-%Y"),  # display format
+            "date": date_obj.strftime("%d-%m-%Y"),   # formatted for display
+            "month_key": date_obj.strftime("%Y-%m"), # for filtering
             "meals": meals
         })
 
