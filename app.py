@@ -1438,14 +1438,16 @@ def late_mess_list():
         cur.close()
         conn.close()
 
-        return render_template('admin_late_mess.html',
-                               late_mess_requests=late_mess_requests)
+        return render_template('admin_late_mess.html', late_mess_requests=late_mess_requests)
 
     except MySQLdb.Error as e:
-        if cur: cur.close()
-        if conn: conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
         flash(f"Database error: {str(e)}", "danger")
         return redirect(url_for('admin_dashboard'))
+
 
 
 
