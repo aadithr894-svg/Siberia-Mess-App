@@ -27,7 +27,7 @@ class WebsiteUser(HttpUser):
             "phone": phone,
             "course": course,
             "password": self.fixed_password,
-            "user_type": user_type
+            "user_type": user_type,
             "food_type":food_type
         }, allow_redirects=True)
 
