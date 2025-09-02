@@ -1421,11 +1421,12 @@ def late_mess_list():
         return redirect(url_for('admin_dashboard'))
 
     try:
-        conn = mysql_pool.get_connection()                  # ✅ Get connection from pool
+        conn = mysql_pool.get_connection()  # ✅ Get connection from pool
         cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
         cur.execute("""
-            SELECT lm.id, u.name, u.email, lm.date_requested, lm.reason, lm.status
+            SELECT lm.id, u.name, u.email, u.course, u.user_type,
+                   lm.date_requested, lm.reason, lm.status
             FROM late_mess lm
             JOIN users u ON u.id = lm.user_id
             ORDER BY lm.date_requested DESC
@@ -1433,9 +1434,10 @@ def late_mess_list():
         late_mess_requests = cur.fetchall()
 
         cur.close()
-        conn.close()                                       # ✅ Return connection to pool
+        conn.close()  # ✅ Return connection to pool
 
-        return render_template('admin_late_mess.html', late_mess_requests=late_mess_requests)
+        return render_template('admin_late_mess.html',
+                               late_mess_requests=late_mess_requests)
 
     except MySQLdb.Error as e:
         if cur:
@@ -1444,7 +1446,6 @@ def late_mess_list():
             conn.close()
         flash(f"Database error: {str(e)}", "danger")
         return redirect(url_for('admin_dashboard'))
-
 
 
 
