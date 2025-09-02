@@ -977,7 +977,7 @@ def qr_scan_counts():
         cur.execute("""
             SELECT meal_date, meal_type, total_count
             FROM daily_meal_attendance
-            ORDER BY meal_date DESC
+            ORDER BY meal_date ASC
         """)
         rows = cur.fetchall()
 
