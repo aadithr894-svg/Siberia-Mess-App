@@ -970,39 +970,46 @@ live_counts = {"breakfast": 0, "lunch": 0, "dinner": 0}
 @login_required
 def qr_scan_counts():
     counts_by_date = {}
-    conn = mysql_pool.get_connection()  # Get connection from pool
+    conn = mysql_pool.get_connection()
     cur = conn.cursor()
 
     try:
         cur.execute("""
             SELECT meal_date, meal_type, total_count
             FROM daily_meal_attendance
-            ORDER BY meal_date ASC
+            ORDER BY meal_date ASC   -- 👈 oldest first (calendar way)
         """)
         rows = cur.fetchall()
 
         for row in rows:
-            date_str = row[0].strftime("%d-%m-%Y")  # Changed format to DD-MM-YYYY
-            meal = row[1]                           # meal_type
-            count = row[2]                          # total_count
+            date_obj = row[0]          # this is a date/datetime from MySQL
+            meal = row[1]              # meal_type
+            count = row[2]             # total_count
 
-            if date_str not in counts_by_date:
-                counts_by_date[date_str] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
-            counts_by_date[date_str][meal] = count
+            if date_obj not in counts_by_date:
+                counts_by_date[date_obj] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
+            counts_by_date[date_obj][meal] = count
 
     except Exception as e:
         flash(f"Error fetching counts: {e}", "danger")
     finally:
         cur.close()
-        conn.close()  # Return connection to pool
-
+        conn.close()
 
     from calendar import month_name
     from datetime import datetime
 
-    months = [{'value': f"{datetime.now().year}-{i:02}", 'name': month_name[i]} for i in range(1,13)]
-    return render_template("admin_qr_count.html", counts_by_date=counts_by_date, months=months)
+    months = [{'value': f"{datetime.now().year}-{i:02}", 'name': month_name[i]} for i in range(1, 13)]
 
+    # ✅ Sort ascending (calendar way)
+    sorted_counts = []
+    for date_obj, meals in sorted(counts_by_date.items(), key=lambda x: x[0], reverse=False):
+        sorted_counts.append({
+            "date": date_obj.strftime("%d-%m-%Y"),  # display format
+            "meals": meals
+        })
+
+    return render_template("admin_qr_count.html", counts_by_date=sorted_counts, months=months)
 
 
 
