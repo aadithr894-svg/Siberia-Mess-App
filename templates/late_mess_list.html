@@ -20,7 +20,7 @@
 </head>
 <body class="bg-gray-100 p-6">
 
-  <div class="max-w-5xl mx-auto">
+  <div class="max-w-6xl mx-auto">
 
     <h2 class="text-2xl font-bold mb-6">Late Mess Requests</h2>
 
@@ -33,10 +33,14 @@
       {% endif %}
     {% endwith %}
 
+    {% if late_mess_requests %}
     <table class="min-w-full bg-white border rounded-lg overflow-hidden" id="late-mess-table">
       <thead class="bg-indigo-500 text-white">
         <tr>
-          <th class="py-2 px-4">User</th>
+          <th class="py-2 px-4">Name</th>
+          <th class="py-2 px-4">Email</th>
+          <th class="py-2 px-4">Course</th>
+          <th class="py-2 px-4">User Type</th>
           <th class="py-2 px-4">Date Requested</th>
           <th class="py-2 px-4">Reason</th>
           <th class="py-2 px-4">Status</th>
@@ -47,36 +51,48 @@
         {% for lm in late_mess_requests %}
         <tr id="late-mess-{{ lm.id }}" class="border-b">
           <td class="py-2 px-4">{{ lm.name }}</td>
+          <td class="py-2 px-4">{{ lm.email }}</td>
+          <td class="py-2 px-4">{{ lm.course or 'N/A' }}</td>
+          <td class="py-2 px-4">{{ lm.user_type or 'N/A' }}</td>
           <td class="py-2 px-4">{{ lm.date_requested }}</td>
           <td class="py-2 px-4">{{ lm.reason or 'N/A' }}</td>
-          <td class="py-2 px-4" id="status-{{ lm.id }}">Pending</td>
-          <td class="py-2 px-4">
-            <button class="approve-btn bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600" data-id="{{ lm.id }}">Approve</button>
+          <td class="py-2 px-4" id="status-{{ lm.id }}">
+            {% if lm.status == 'approved' %}
+              <span class="bg-green-500 text-white px-2 py-1 rounded">Approved</span>
+            {% else %}
+              <span class="bg-yellow-400 text-white px-2 py-1 rounded">Pending</span>
+            {% endif %}
+          </td>
+          <td class="py-2 px-4" id="action-{{ lm.id }}">
+            {% if lm.status != 'approved' %}
+              <button class="approve-btn bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600" data-id="{{ lm.id }}">Approve</button>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    {% else %}
+      <div class="alert bg-blue-100 text-blue-700 p-4 rounded mt-4">
+        No late mess requests found.
+      </div>
+    {% endif %}
+
   </div>
 
 <script>
 document.querySelectorAll('.approve-btn').forEach(button => {
     button.addEventListener('click', function() {
         const lmId = this.getAttribute('data-id');
-        fetch(`/admin/approve_late/${lmId}`)
-            .then(response => {
-                // If Flask returns a redirect page (HTML), treat as success
-                if (response.redirected) {
-                    window.location.href = response.url;
-                    return;
-                }
-                return response.json();
-            })
+        fetch(`/admin/approve_late/${lmId}`, { method: 'POST' })
+            .then(response => response.json())
             .then(data => {
-                // Optional: if using JSON API, handle success/fail here
-                // For now, just update table directly
-                document.getElementById(`status-${lmId}`).innerText = 'Approved';
-                this.remove(); // Remove approve button
+                if(data.success) {
+                    document.getElementById(`status-${lmId}`).innerHTML = '<span class="bg-green-500 text-white px-2 py-1 rounded">Approved</span>';
+                    document.getElementById(`action-${lmId}`).innerHTML = '';
+                } else {
+                    alert("Error: " + data.message);
+                }
             })
             .catch(err => {
                 alert("Error approving late mess: " + err);
