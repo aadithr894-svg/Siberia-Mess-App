@@ -10,8 +10,6 @@
             <tr>
                 <th>Name</th>
                 <th>Email</th>
-                <th>Course</th>
-                <th>User Type</th>
                 <th>Date Requested</th>
                 <th>Reason</th>
                 <th>Status</th>
@@ -19,30 +17,22 @@
             </tr>
         </thead>
         <tbody>
-            {% for lm in late_mess_requests %}
-            <tr id="row-{{ lm.id }}">
-                <td>{{ lm.name }}</td>
-                <td>{{ lm.email }}</td>
-                <td>{{ lm.course }}</td>
-                <td>{{ lm.user_type }}</td>
-                <td>
-                    {% if lm.date_requested %}
-                        {{ lm.date_requested.strftime("%d-%m-%Y %H:%M") }}
-                    {% else %}
-                        N/A
-                    {% endif %}
-                </td>
-                <td>{{ lm.reason or 'N/A' }}</td>
-                <td id="status-{{ lm.id }}">
-                    {% if lm.status == 'approved' %}
+            {% for req in late_mess_requests %}
+            <tr id="row-{{ req.id }}">
+                <td>{{ req.name }}</td>
+                <td>{{ req.email }}</td>
+                <td>{{ req.date_requested }}</td>
+                <td>{{ req.reason or 'N/A' }}</td>
+                <td id="status-{{ req.id }}">
+                    {% if req.status == 'approved' %}
                         <span class="badge bg-success">Approved</span>
                     {% else %}
                         <span class="badge bg-warning">Pending</span>
                     {% endif %}
                 </td>
-                <td id="action-{{ lm.id }}">
-                    {% if lm.status != 'approved' %}
-                        <button class="btn btn-success btn-sm" onclick="approveLate({{ lm.id }})">Approve</button>
+                <td id="action-{{ req.id }}">
+                    {% if req.status != 'approved' %}
+                        <button class="btn btn-success btn-sm" onclick="approveLate({{ req.id }})">Approve</button>
                     {% endif %}
                 </td>
             </tr>
