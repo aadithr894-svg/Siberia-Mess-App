@@ -8,7 +8,7 @@
   <style>
     body {
       font-family: 'Roboto', sans-serif;
-      background: #f0f4ff; /* light blue background */
+      background: #f0f4ff;
       min-height: 100vh;
       display: flex;
       justify-content: center;
@@ -102,10 +102,10 @@
 
       <form method="POST" id="mess-cut-form">
         <label for="start_date">Start Date:</label>
-        <input type="date" id="start_date" name="start_date" min="{{ min_start_date }}" required onkeydown="return false;">
+        <input type="date" id="start_date" name="start_date" required onkeydown="return false;">
 
         <label for="end_date">End Date:</label>
-        <input type="date" id="end_date" name="end_date" min="{{ min_end_date }}" required onkeydown="return false;">
+        <input type="date" id="end_date" name="end_date" required onkeydown="return false;">
         <small>⚠️ Minimum 3 consecutive days</small>
 
         <button type="submit">✅ Apply Mess Cut</button>
@@ -117,29 +117,49 @@
     const startInput = document.getElementById('start_date');
     const endInput = document.getElementById('end_date');
 
-    startInput.addEventListener('change', function() {
-      const startDate = new Date(this.value);
-      const minEndDate = new Date(startDate);
-      minEndDate.setDate(startDate.getDate() + 2); // minimum 3 days
-      const minDateStr = minEndDate.toISOString().split('T')[0];
-      endInput.value = minDateStr;
-      endInput.min = minDateStr;
-    });
+    function formatDate(d) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
 
-    // Prevent submitting if tomorrow after 10 PM
-    const form = document.getElementById('mess-cut-form');
-    form.addEventListener('submit', function(e) {
+    function updateDateLimits() {
       const now = new Date();
-      const startDate = new Date(startInput.value);
-      const tomorrow = new Date();
-      tomorrow.setDate(now.getDate() + 1);
-      tomorrow.setHours(0,0,0,0);
+      let minStartDate = new Date();
 
-      if (startDate.getTime() === tomorrow.getTime() && now.getHours() >= 22) {
-        e.preventDefault();
-        alert("Cannot apply mess cut for tomorrow after 10 PM today.");
+      // If it's 10 PM or later, earliest start date is day after tomorrow
+      if (now.getHours() >= 22) {
+        minStartDate.setDate(now.getDate() + 2);
+      } else {
+        // Earliest start date is tomorrow
+        minStartDate.setDate(now.getDate() + 1);
       }
-    });
+
+      const minStartDateStr = formatDate(minStartDate);
+      startInput.min = minStartDateStr;
+
+      if (!startInput.value || new Date(startInput.value) < minStartDate) {
+        startInput.value = minStartDateStr;
+      }
+
+      // End date: minimum 3 days after start
+      const startDate = new Date(startInput.value);
+      const minEndDate = new Date(startDate);
+      minEndDate.setDate(startDate.getDate() + 2);
+      const minEndDateStr = formatDate(minEndDate);
+      endInput.min = minEndDateStr;
+
+      if (!endInput.value || new Date(endInput.value) < minEndDate) {
+        endInput.value = minEndDateStr;
+      }
+    }
+
+    // Initial setup
+    updateDateLimits();
+
+    // Update end date when start date changes
+    startInput.addEventListener('change', updateDateLimits);
   </script>
 </body>
 </html>
