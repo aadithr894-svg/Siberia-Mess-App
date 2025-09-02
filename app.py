@@ -1424,13 +1424,14 @@ def late_mess_list():
 
     try:
         conn = mysql_pool.get_connection()
-        cur = conn.cursor(MySQLdb.cursors.DictCursor)
+        cur = conn.cursor(dictionary=True)  # DictCursor to get dicts
 
+        # Join users table to get name/email/etc
         cur.execute("""
             SELECT lm.id, u.name, u.email, u.course, u.user_type,
                    lm.date_requested, lm.reason, lm.status
             FROM late_mess lm
-            LEFT JOIN users u ON u.id = lm.user_id
+            JOIN users u ON u.id = lm.user_id
             ORDER BY lm.date_requested DESC
         """)
         late_mess_requests = cur.fetchall()
@@ -1440,13 +1441,14 @@ def late_mess_list():
 
         return render_template('admin_late_mess.html', late_mess_requests=late_mess_requests)
 
-    except MySQLdb.Error as e:
+    except Exception as e:
         if cur:
             cur.close()
         if conn:
             conn.close()
-        flash(f"Database error: {str(e)}", "danger")
+        flash(f"Database error: {e}", "danger")
         return redirect(url_for('admin_dashboard'))
+
 
 
 
@@ -1484,26 +1486,35 @@ from flask import jsonify, request, render_template
 import MySQLdb.cursors
 
 # ---------------- ADMIN: APPROVE LATE MESS ----------------
-@app.route('/admin/approve_late/<int:late_mess_id>', methods=['POST'])
+@app.route('/admin/approve_late/<int:lm_id>', methods=['POST'])
 @login_required
-def approve_late(late_mess_id):
+def approve_late(lm_id):
     if not getattr(current_user, 'is_admin', False):
-        return "", 403
+        return jsonify({'error': 'Unauthorized'}), 403
 
     try:
         conn = mysql_pool.get_connection()
         cur = conn.cursor()
-        cur.execute("UPDATE late_mess SET status='approved' WHERE id=%s", (late_mess_id,))
+
+        # Update the late_mess status to 'approved'
+        cur.execute(
+            "UPDATE late_mess SET status=%s WHERE id=%s",
+            ("approved", lm_id)
+        )
         conn.commit()
+
         cur.close()
         conn.close()
-        return "", 204
+
+        return jsonify({'success': True})  # Return JSON for JS
+
     except Exception as e:
         if cur:
             cur.close()
         if conn:
             conn.close()
-        return "", 500
+        return jsonify({'error': str(e)}), 500
+
 
 
 # ---------------- ADMIN: BULK APPROVE NEW USERS ----------------

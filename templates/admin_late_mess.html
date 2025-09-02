@@ -50,12 +50,17 @@
 <script>
 function approveLate(id) {
     $.post("/admin/approve_late/" + id)
-    .done(function() {
-        $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
-        $("#action-" + id).html('');
+    .done(function(data) {
+        if (data.success) {
+            $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
+            $("#action-" + id).html('');
+        } else if (data.error) {
+            alert("❌ " + data.error);
+        }
     })
-    .fail(function() {
-        alert("❌ Error approving late mess!");
+    .fail(function(xhr) {
+        let msg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : "Server error";
+        alert("❌ Error approving late mess: " + msg);
     });
 }
 </script>
