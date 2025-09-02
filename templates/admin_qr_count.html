@@ -27,12 +27,12 @@
         </tr>
       </thead>
       <tbody>
-        {% for date_key, meals in counts_by_date|dictsort(reverse=True) %}
-        <tr data-month="{{ date_key[:7] }}">
-          <td>{{ date_key }}</td>
-          <td>{{ meals.get('breakfast', 0) }}</td>
-          <td>{{ meals.get('lunch', 0) }}</td>
-          <td>{{ meals.get('dinner', 0) }}</td>
+        {% for row in counts_by_date %}
+        <tr data-month="{{ row.month_key }}">
+          <td>{{ row.date }}</td>
+          <td>{{ row.meals.breakfast }}</td>
+          <td>{{ row.meals.lunch }}</td>
+          <td>{{ row.meals.dinner }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -58,7 +58,7 @@
     });
   });
 
-  // Auto-refresh counts every 2 minutes (optional, can update table dynamically)
+  // Auto-refresh counts every 2 minutes
   setInterval(() => {
     fetch("/admin/qr_scan_counts_json")
       .then(res => res.json())
