@@ -777,11 +777,13 @@ def request_late_mess():
     start_time = time(16, 0)  # 16:00
     end_time = time(20, 30)   # 20:30
 
-    conn = mysql_pool.get_connection()          # Get connection from pool
-    cur = conn.cursor(dictionary=True)          # DictCursor equivalent
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
 
     try:
         if request.method == 'POST':
+            reason = request.form.get("reason")  # ✅ capture reason
+
             # Check if current time is within allowed window
             if not (start_time <= now_time <= end_time):
                 flash("Late mess can only be requested between 4:00 PM and 8:30 PM IST", "warning")
@@ -797,9 +799,9 @@ def request_late_mess():
                 flash("You have already requested late mess today.", "info")
             else:
                 cur.execute("""
-                    INSERT INTO late_mess(user_id, date_requested, status)
-                    VALUES (%s, %s, %s)
-                """, (current_user.id, today, "pending"))
+                    INSERT INTO late_mess(user_id, date_requested, reason, status)
+                    VALUES (%s, %s, %s, %s)
+                """, (current_user.id, today, reason, "pending"))
                 conn.commit()
                 flash("Late mess requested successfully!", "success")
 
@@ -820,7 +822,7 @@ def request_late_mess():
 
     finally:
         cur.close()
-        conn.close()                            # Return connection to pool
+        conn.close()
 
     can_request = start_time <= now_time <= end_time
 
@@ -1421,29 +1423,27 @@ def late_mess_list():
         return redirect(url_for('admin_dashboard'))
 
     try:
-        conn = mysql_pool.get_connection()  # ✅ Get connection from pool
+        conn = mysql_pool.get_connection()
         cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
         cur.execute("""
             SELECT lm.id, u.name, u.email, u.course, u.user_type,
                    lm.date_requested, lm.reason, lm.status
             FROM late_mess lm
-            JOIN users u ON u.id = lm.user_id
+            LEFT JOIN users u ON u.id = lm.user_id
             ORDER BY lm.date_requested DESC
         """)
         late_mess_requests = cur.fetchall()
 
         cur.close()
-        conn.close()  # ✅ Return connection to pool
+        conn.close()
 
         return render_template('admin_late_mess.html',
                                late_mess_requests=late_mess_requests)
 
     except MySQLdb.Error as e:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        if cur: cur.close()
+        if conn: conn.close()
         flash(f"Database error: {str(e)}", "danger")
         return redirect(url_for('admin_dashboard'))
 
