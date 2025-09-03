@@ -296,11 +296,11 @@ def approve_user(user_id):
 
         # 3. Insert into users (qr_path left empty initially)
         cur.execute("""
-            INSERT INTO users (name, email, phone, course, password, user_type, approved, qr_path)
+            INSERT INTO users (name, email, phone, course, password, user_type,food_type, approved, qr_path)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             user['name'], user['email'], user['phone'], user['course'],
-            user['password'], user['user_type'], 1, ""
+            user['password'], user['user_type'],user['food_type'], 1, ""
         ))
 
         new_user_id = cur.lastrowid
@@ -1298,61 +1298,63 @@ def users_meal_counts():
 
 # ---------------- ADMIN: Add mess cut for any user ----------------
 # ---------------- ADMIN: Add mess cut for any user ----------------
-# ---------------- ADMIN: Add mess cut for any user ----------------
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_login import login_required, current_user
+import mysql.connector
+from datetime import datetime
+
 @app.route('/admin/add_mess_cut', methods=['GET', 'POST'])
 @login_required
 def add_mess_cut_admin():
     if not getattr(current_user, 'is_admin', False):
         flash("Unauthorized access", "danger")
-        return render_template('admin_add_mess_cut.html', users=[])
+        return redirect(url_for('admin_dashboard'))
 
-    conn = mysql_pool.get_connection()
-    cur = conn.cursor(MySQLdb.cursors.DictCursor)
-
+    conn = None
+    cur = None
     users = []
+
     try:
-        # ✅ Adjust to match your DB column names
-        cur.execute("SELECT id, full_name AS name, department AS course FROM users")
+        # ✅ Get connection from pool
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor(dictionary=True)
+
+        # ✅ Adjust these column names to match your DB!
+        cur.execute("SELECT id, name, course FROM users")
         users = cur.fetchall()
+        print("DEBUG USERS FETCHED:", users)
 
         if request.method == 'POST':
             user_id = request.form['user_id']
             start_date = request.form['start_date']
             end_date = request.form['end_date']
 
-            from datetime import datetime
+            # validate dates
             start_obj = datetime.strptime(start_date, "%Y-%m-%d")
             end_obj = datetime.strptime(end_date, "%Y-%m-%d")
-
             if start_obj > end_obj:
-                flash("Start date cannot be after end date!", "danger")
-                return render_template('admin_add_mess_cut.html', users=users)
+                flash("❌ Start date cannot be after end date!", "danger")
+                return redirect(url_for('add_mess_cut_admin'))
 
-            # ✅ Prevent duplicates
-            cur.execute(
-                "SELECT id FROM mess_cut WHERE user_id=%s AND start_date=%s AND end_date=%s",
-                (user_id, start_date, end_date)
-            )
-            if cur.fetchone():
-                flash("Mess cut already exists for this user & date range!", "warning")
-                return render_template('admin_add_mess_cut.html', users=users)
-
-            # ✅ Insert mess cut
+            # ✅ Insert into mess_cut
             cur.execute(
                 "INSERT INTO mess_cut (user_id, start_date, end_date) VALUES (%s, %s, %s)",
                 (user_id, start_date, end_date)
             )
             conn.commit()
-            flash("Mess cut added successfully!", "success")
-            return render_template('admin_add_mess_cut.html', users=users)
+            flash("✅ Mess cut added successfully!", "success")
+            return redirect(url_for('add_mess_cut_admin'))
 
-    except MySQLdb.Error as e:
-        conn.rollback()
+    except mysql.connector.Error as e:
+        if conn:
+            conn.rollback()
         flash(f"Database error: {str(e)}", "danger")
 
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
     return render_template('admin_add_mess_cut.html', users=users)
 
