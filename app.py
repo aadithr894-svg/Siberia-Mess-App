@@ -783,7 +783,7 @@ def request_late_mess():
     try:
         # ✅ Check if user is under mess cut (start, end, or in between)
         cur.execute("""
-            SELECT * FROM mess_cuts 
+            SELECT * FROM mess_cut 
             WHERE user_id=%s AND %s BETWEEN start_date AND end_date
         """, (current_user.id, today))
         mess_cut = cur.fetchone()
