@@ -1308,13 +1308,12 @@ def add_mess_cut_admin():
     cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
     try:
-        # ✅ Adjust query to match your table column names
-        # Change "full_name" → your actual column for name if different
-        # Change "department" → your actual column for course if different
-        cur.execute("SELECT id, full_name AS name, department AS course FROM users")
+        # ✅ Use actual column names from your `users` table
+        # If your table has `name` and `course`
+        cur.execute("SELECT id, name, course FROM users")
         users = cur.fetchall()
 
-        # Debug: check what data is coming
+        # Debug
         print("USERS FETCHED:", users)
 
         if request.method == 'POST':
@@ -1322,7 +1321,6 @@ def add_mess_cut_admin():
             start_date = request.form['start_date']
             end_date = request.form['end_date']
 
-            # ✅ Prevent invalid dates
             from datetime import datetime
             start_obj = datetime.strptime(start_date, "%Y-%m-%d")
             end_obj = datetime.strptime(end_date, "%Y-%m-%d")
