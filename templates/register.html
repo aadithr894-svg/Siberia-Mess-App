@@ -28,8 +28,7 @@
       position: relative;
       margin-bottom: 1.5rem;
     }
-    .input-field input,
-    .input-field select {
+    .input-field input, .input-field select {
       width: 100%;
       padding: 14px;
       border-radius: 0.5rem;
@@ -37,7 +36,6 @@
       outline: none;
       transition: border 0.3s;
       font-size: 1rem;
-      background: white;
     }
     .input-field label {
       position: absolute;
@@ -72,10 +70,20 @@
     .flash-danger { background-color: #e74c3c; color: white; }
 
     @media (max-width: 400px) {
-      .card { padding: 1.5rem; }
-      .input-field input, .input-field select { padding: 12px; font-size: 0.95rem; }
-      .input-field label { font-size: 0.9rem; }
-      button { padding: 12px; font-size: 0.95rem; }
+      .card {
+        padding: 1.5rem;
+      }
+      .input-field input, .input-field select {
+        padding: 12px;
+        font-size: 0.95rem;
+      }
+      .input-field label {
+        font-size: 0.9rem;
+      }
+      button {
+        padding: 12px;
+        font-size: 0.95rem;
+      }
     }
   </style>
 </head>
@@ -118,10 +126,9 @@
         <label>Password</label>
       </div>
 
-      <!-- User Type -->
       <div class="input-field">
         <select name="user_type" required>
-          <option value="" disabled selected>Select User Type</option>
+          <option value="" disabled selected></option>
           <option value="guest">Guest</option>
           <option value="inmate">Inmate</option>
           <option value="outmess">Outmess</option>
@@ -129,19 +136,17 @@
         <label>User Type</label>
       </div>
 
-      <!-- ✅ Food Preference -->
+      <!-- ✅ New Veg / Non-Veg Dropdown -->
       <div class="input-field">
         <select name="food_type" required>
-          <option value="" disabled selected>Select Food Preference</option>
+          <option value="" disabled selected></option>
           <option value="veg">Veg</option>
           <option value="non-veg">Non-Veg</option>
         </select>
         <label>Food Preference</label>
       </div>
 
-      <button type="submit" class="w-full p-3 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">
-        Register
-      </button>
+      <button type="submit" class="w-full p-3 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">Register</button>
     </form>
 
     <p class="mt-4 text-center text-gray-700 text-sm">
