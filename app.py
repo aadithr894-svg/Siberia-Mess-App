@@ -307,11 +307,11 @@ def approve_user(user_id):
 
         # 3. Insert into users (qr_path left empty initially)
         cur.execute("""
-            INSERT INTO users (name, email, phone, course, password, user_type, approved, qr_path)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO users (name, email, phone, course, password, user_type,food_type, approved, qr_path)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s,%s)
         """, (
             user['name'], user['email'], user['phone'], user['course'],
-            user['password'], user['user_type'], 1, ""
+            user['password'], user['user_type'],user['food_type'], 1, ""
         ))
 
         new_user_id = cur.lastrowid
