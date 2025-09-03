@@ -1298,6 +1298,11 @@ def users_meal_counts():
 
 # ---------------- ADMIN: Add mess cut for any user ----------------
 # ---------------- ADMIN: Add mess cut for any user ----------------
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_login import login_required, current_user
+import mysql.connector
+from datetime import datetime
+
 @app.route('/admin/add_mess_cut', methods=['GET', 'POST'])
 @login_required
 def add_mess_cut_admin():
@@ -1305,41 +1310,33 @@ def add_mess_cut_admin():
         flash("Unauthorized access", "danger")
         return redirect(url_for('admin_dashboard'))
 
-    try:
-        # ✅ Get pooled connection
-        conn = mysql_pool.get_connection()
-        cur = conn.cursor(MySQLdb.cursors.DictCursor)
+    conn = None
+    cur = None
+    users = []
 
-        # ✅ Make sure column names match your DB
-        # If your table has "name" and "course", keep as is
+    try:
+        # ✅ Get connection from pool
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor(dictionary=True)
+
+        # ✅ Adjust these column names to match your DB!
         cur.execute("SELECT id, name, course FROM users")
         users = cur.fetchall()
-
-        print("DEBUG USERS FETCHED:", users)  # log in terminal
+        print("DEBUG USERS FETCHED:", users)
 
         if request.method == 'POST':
             user_id = request.form['user_id']
             start_date = request.form['start_date']
             end_date = request.form['end_date']
 
-            from datetime import datetime
+            # validate dates
             start_obj = datetime.strptime(start_date, "%Y-%m-%d")
             end_obj = datetime.strptime(end_date, "%Y-%m-%d")
-
             if start_obj > end_obj:
                 flash("❌ Start date cannot be after end date!", "danger")
                 return redirect(url_for('add_mess_cut_admin'))
 
-            # ✅ Prevent duplicates
-            cur.execute(
-                "SELECT id FROM mess_cut WHERE user_id=%s AND start_date=%s AND end_date=%s",
-                (user_id, start_date, end_date)
-            )
-            if cur.fetchone():
-                flash("⚠️ Mess cut already exists for this user & date range!", "warning")
-                return redirect(url_for('add_mess_cut_admin'))
-
-            # ✅ Insert new mess cut
+            # ✅ Insert into mess_cut
             cur.execute(
                 "INSERT INTO mess_cut (user_id, start_date, end_date) VALUES (%s, %s, %s)",
                 (user_id, start_date, end_date)
@@ -1348,21 +1345,18 @@ def add_mess_cut_admin():
             flash("✅ Mess cut added successfully!", "success")
             return redirect(url_for('add_mess_cut_admin'))
 
-    except MySQLdb.Error as e:
+    except mysql.connector.Error as e:
         if conn:
             conn.rollback()
         flash(f"Database error: {str(e)}", "danger")
-        users = []
 
     finally:
         if cur:
             cur.close()
         if conn:
-            conn.close()  # ✅ Return connection to pool
+            conn.close()
 
     return render_template('admin_add_mess_cut.html', users=users)
-
-
 
 
 
