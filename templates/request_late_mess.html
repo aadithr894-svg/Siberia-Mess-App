@@ -16,10 +16,6 @@
     <p>Current time: {{ now_time }} | Allowed: {{ start_time }} - {{ end_time }}</p>
 
     <form method="POST" action="{{ url_for('request_late_mess') }}">
-        <div class="mb-2">
-            <label for="reason" class="form-label">Reason (optional):</label>
-            <input type="text" class="form-control" id="reason" name="reason" placeholder="Enter reason">
-        </div>
         <button type="submit" class="btn btn-primary" {% if not can_request %}disabled{% endif %}>
             Request Late Mess
         </button>
@@ -36,7 +32,6 @@
         <thead>
             <tr>
                 <th>Date</th>
-                <th>Reason</th>
                 <th>Status</th>
             </tr>
         </thead>
@@ -44,7 +39,6 @@
             {% for req in late_requests %}
                 <tr>
                     <td>{{ req.date_requested }}</td>
-                    <td>{{ req.reason or '-' }}</td>
                     <td>{{ req.status|capitalize }}</td>
                 </tr>
             {% endfor %}
