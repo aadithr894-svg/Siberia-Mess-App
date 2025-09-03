@@ -26,15 +26,19 @@
                 <div class="mb-3">
                     <label class="form-label fw-bold">👤 Select User</label>
                     <div id="userList" class="stylish-list">
-                        {% for user in users %}
-                        <div class="form-check user-item">
-                            <input class="form-check-input" type="radio" 
-                                   name="user_id" value="{{ user.id }}" id="user{{ user.id }}" required>
-                            <label class="form-check-label" for="user{{ user.id }}">
-                                {{ user.name }}{% if user.course %} — {{ user.course }}{% endif %}
-                            </label>
-                        </div>
-                        {% endfor %}
+                        {% if users %}
+                            {% for user in users %}
+                            <div class="form-check user-item">
+                                <input class="form-check-input" type="radio" 
+                                       name="user_id" value="{{ user.id }}" id="user{{ user.id }}" required>
+                                <label class="form-check-label" for="user{{ user.id }}">
+                                    {{ user.name }}{% if user.course %} — {{ user.course }}{% endif %}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted">⚠️ No users found in database</p>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -112,7 +116,7 @@ document.getElementById("startDate").addEventListener("change", function() {
     const start = new Date(this.value);
     if (isNaN(start)) return;
     const minEnd = new Date(start);
-    minEnd.setDate(start.getDate() + 3); // +3 days
+    minEnd.setDate(start.getDate() + 3);
     const minEndStr = minEnd.toISOString().split("T")[0];
     document.getElementById("endDate").setAttribute("min", minEndStr);
 
@@ -143,7 +147,6 @@ document.getElementById("messCutForm").addEventListener("submit", function(e) {
         return;
     }
 
-    // get selected user
     const selectedUser = document.querySelector("input[name='user_id']:checked");
     if (!selectedUser) {
         e.preventDefault();
@@ -152,7 +155,6 @@ document.getElementById("messCutForm").addEventListener("submit", function(e) {
     }
     const userLabel = document.querySelector("label[for='" + selectedUser.id + "']").innerText;
 
-    // confirmation popup with DD-MM-YYYY
     const confirmMsg = `✅ Please confirm:\n\n👤 User: ${userLabel}\n📅 Start: ${formatDate(startInput)}\n📅 End: ${formatDate(endInput)}\n\nDo you want to submit?`;
     
     if (!confirm(confirmMsg)) {

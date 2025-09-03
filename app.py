@@ -1308,9 +1308,14 @@ def add_mess_cut_admin():
     cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
     try:
-        # ✅ Ensure correct columns exist in DB
-        cur.execute("SELECT id, name, course FROM users")
+        # ✅ Adjust query to match your table column names
+        # Change "full_name" → your actual column for name if different
+        # Change "department" → your actual column for course if different
+        cur.execute("SELECT id, full_name AS name, department AS course FROM users")
         users = cur.fetchall()
+
+        # Debug: check what data is coming
+        print("USERS FETCHED:", users)
 
         if request.method == 'POST':
             user_id = request.form['user_id']
@@ -1354,6 +1359,7 @@ def add_mess_cut_admin():
         conn.close()  # Return connection to pool
 
     return render_template('admin_add_mess_cut.html', users=users)
+
 
 
 
