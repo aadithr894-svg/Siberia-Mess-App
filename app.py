@@ -781,13 +781,24 @@ def request_late_mess():
     cur = conn.cursor(dictionary=True)
 
     try:
-        if request.method == 'POST':
-            reason = request.form.get("reason")  # ✅ capture reason
+        # ✅ Check if user is under mess cut (start, end, or in between)
+        cur.execute("""
+            SELECT * FROM mess_cuts 
+            WHERE user_id=%s AND %s BETWEEN start_date AND end_date
+        """, (current_user.id, today))
+        mess_cut = cur.fetchone()
+        if mess_cut:
+            flash("❌ You cannot request late mess because you are under a mess cut today.", "danger")
+            can_request = False
+        else:
+            can_request = start_time <= now_time <= end_time
 
-            # Check if current time is within allowed window
-            if not (start_time <= now_time <= end_time):
-                flash("Late mess can only be requested between 4:00 PM and 8:30 PM IST", "warning")
+        if request.method == 'POST':
+            if not can_request:
+                flash("You cannot request late mess at this time or due to a mess cut.", "warning")
                 return redirect(url_for('request_late_mess'))
+
+            reason = request.form.get("reason")  # ✅ capture reason
 
             # Check if the user already requested today
             cur.execute(
@@ -796,14 +807,14 @@ def request_late_mess():
             )
             existing = cur.fetchone()
             if existing:
-                flash("You have already requested late mess today.", "info")
+                flash("ℹ️ You have already requested late mess today.", "info")
             else:
                 cur.execute("""
                     INSERT INTO late_mess(user_id, date_requested, reason, status)
                     VALUES (%s, %s, %s, %s)
                 """, (current_user.id, today, reason, "pending"))
                 conn.commit()
-                flash("Late mess requested successfully!", "success")
+                flash("✅ Late mess requested successfully!", "success")
 
             return redirect(url_for('request_late_mess'))
 
@@ -823,8 +834,6 @@ def request_late_mess():
     finally:
         cur.close()
         conn.close()
-
-    can_request = start_time <= now_time <= end_time
 
     return render_template(
         'request_late_mess.html',
