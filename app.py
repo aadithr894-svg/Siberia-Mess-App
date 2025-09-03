@@ -1297,6 +1297,7 @@ def users_meal_counts():
 
 
 # ---------------- ADMIN: Add mess cut for any user ----------------
+# ---------------- ADMIN: Add mess cut for any user ----------------
 @app.route('/admin/add_mess_cut', methods=['GET', 'POST'])
 @login_required
 def add_mess_cut_admin():
@@ -1304,17 +1305,17 @@ def add_mess_cut_admin():
         flash("Unauthorized access", "danger")
         return redirect(url_for('admin_dashboard'))
 
-    conn = mysql_pool.get_connection()
-    cur = conn.cursor(MySQLdb.cursors.DictCursor)
-
     try:
-        # ✅ Use actual column names from your `users` table
-        # If your table has `name` and `course`
+        # ✅ Get pooled connection
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor(MySQLdb.cursors.DictCursor)
+
+        # ✅ Make sure column names match your DB
+        # If your table has "name" and "course", keep as is
         cur.execute("SELECT id, name, course FROM users")
         users = cur.fetchall()
 
-        # Debug
-        print("USERS FETCHED:", users)
+        print("DEBUG USERS FETCHED:", users)  # log in terminal
 
         if request.method == 'POST':
             user_id = request.form['user_id']
@@ -1326,7 +1327,7 @@ def add_mess_cut_admin():
             end_obj = datetime.strptime(end_date, "%Y-%m-%d")
 
             if start_obj > end_obj:
-                flash("Start date cannot be after end date!", "danger")
+                flash("❌ Start date cannot be after end date!", "danger")
                 return redirect(url_for('add_mess_cut_admin'))
 
             # ✅ Prevent duplicates
@@ -1335,26 +1336,29 @@ def add_mess_cut_admin():
                 (user_id, start_date, end_date)
             )
             if cur.fetchone():
-                flash("Mess cut already exists for this user & date range!", "warning")
+                flash("⚠️ Mess cut already exists for this user & date range!", "warning")
                 return redirect(url_for('add_mess_cut_admin'))
 
-            # ✅ Insert mess cut
+            # ✅ Insert new mess cut
             cur.execute(
                 "INSERT INTO mess_cut (user_id, start_date, end_date) VALUES (%s, %s, %s)",
                 (user_id, start_date, end_date)
             )
             conn.commit()
-            flash("Mess cut added successfully!", "success")
+            flash("✅ Mess cut added successfully!", "success")
             return redirect(url_for('add_mess_cut_admin'))
 
     except MySQLdb.Error as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         flash(f"Database error: {str(e)}", "danger")
         users = []
 
     finally:
-        cur.close()
-        conn.close()  # Return connection to pool
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()  # ✅ Return connection to pool
 
     return render_template('admin_add_mess_cut.html', users=users)
 
