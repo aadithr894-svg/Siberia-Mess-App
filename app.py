@@ -1308,7 +1308,8 @@ def add_mess_cut_admin():
     cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
     try:
-        cur.execute("SELECT id, name, course FROM users")  # ensure course exists in DB
+        # ✅ Ensure correct columns exist in DB
+        cur.execute("SELECT id, name, course FROM users")
         users = cur.fetchall()
 
         if request.method == 'POST':
@@ -1316,6 +1317,25 @@ def add_mess_cut_admin():
             start_date = request.form['start_date']
             end_date = request.form['end_date']
 
+            # ✅ Prevent invalid dates
+            from datetime import datetime
+            start_obj = datetime.strptime(start_date, "%Y-%m-%d")
+            end_obj = datetime.strptime(end_date, "%Y-%m-%d")
+
+            if start_obj > end_obj:
+                flash("Start date cannot be after end date!", "danger")
+                return redirect(url_for('add_mess_cut_admin'))
+
+            # ✅ Prevent duplicates
+            cur.execute(
+                "SELECT id FROM mess_cut WHERE user_id=%s AND start_date=%s AND end_date=%s",
+                (user_id, start_date, end_date)
+            )
+            if cur.fetchone():
+                flash("Mess cut already exists for this user & date range!", "warning")
+                return redirect(url_for('add_mess_cut_admin'))
+
+            # ✅ Insert mess cut
             cur.execute(
                 "INSERT INTO mess_cut (user_id, start_date, end_date) VALUES (%s, %s, %s)",
                 (user_id, start_date, end_date)

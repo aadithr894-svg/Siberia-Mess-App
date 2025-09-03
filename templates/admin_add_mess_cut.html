@@ -31,7 +31,7 @@
                             <input class="form-check-input" type="radio" 
                                    name="user_id" value="{{ user.id }}" id="user{{ user.id }}" required>
                             <label class="form-check-label" for="user{{ user.id }}">
-                                {{ user.name }} — {{ user.course }}
+                                {{ user.name }}{% if user.course %} — {{ user.course }}{% endif %}
                             </label>
                         </div>
                         {% endfor %}
@@ -122,10 +122,19 @@ document.getElementById("startDate").addEventListener("change", function() {
     }
 });
 
+// ✅ Helper: format YYYY-MM-DD → DD-MM-YYYY
+function formatDate(dateStr) {
+    const parts = dateStr.split("-");
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+}
+
 // ✅ Validate + Confirm before submit
 document.getElementById("messCutForm").addEventListener("submit", function(e) {
-    const start = new Date(document.getElementById("startDate").value);
-    const end = new Date(document.getElementById("endDate").value);
+    const startInput = document.getElementById("startDate").value;
+    const endInput = document.getElementById("endDate").value;
+
+    const start = new Date(startInput);
+    const end = new Date(endInput);
     const diff = (end - start) / (1000 * 60 * 60 * 24);
 
     if (diff < 3) {
@@ -143,8 +152,8 @@ document.getElementById("messCutForm").addEventListener("submit", function(e) {
     }
     const userLabel = document.querySelector("label[for='" + selectedUser.id + "']").innerText;
 
-    // confirmation popup
-    const confirmMsg = `✅ Please confirm:\n\n👤 User: ${userLabel}\n📅 Start: ${document.getElementById("startDate").value}\n📅 End: ${document.getElementById("endDate").value}\n\nDo you want to submit?`;
+    // confirmation popup with DD-MM-YYYY
+    const confirmMsg = `✅ Please confirm:\n\n👤 User: ${userLabel}\n📅 Start: ${formatDate(startInput)}\n📅 End: ${formatDate(endInput)}\n\nDo you want to submit?`;
     
     if (!confirm(confirmMsg)) {
         e.preventDefault();
