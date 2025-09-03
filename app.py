@@ -135,48 +135,61 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        name = request.form['name']
-        email = request.form['email']
-        course = request.form['course']
-        phone = request.form['phone']
-        password = request.form['password']
-        user_type = request.form['user_type']  # student or admin
-        food_type = request.form['food_type']  # veg or non-veg  ✅
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        course = request.form.get('course', '').strip()
+        phone = request.form.get('phone', '').strip()
+        password = request.form.get('password', '')
+        user_type = request.form.get('user_type')  # guest / inmate / outmess
+        food_type = request.form.get('food_type')  # veg / non-veg ✅
 
-        # Basic required fields check
-        if not name or not email or not password or not user_type or not food_type:
-            flash("All fields are required.", "danger")
+        # Basic validation
+        if not all([name, email, course, phone, password, user_type, food_type]):
+            flash("⚠️ All fields are required.", "danger")
             return redirect(url_for('register'))
 
-        # Phone number validation: must be 10 digits
         if not phone.isdigit() or len(phone) != 10:
-            flash("Phone number must be exactly 10 digits.", "danger")
+            flash("⚠️ Phone number must be exactly 10 digits.", "danger")
             return redirect(url_for('register'))
 
-        # ---------------- POOL CONNECTION ----------------
-        conn = mysql_pool.get_connection()
-        cur = conn.cursor(dictionary=True)
-
-        # Hash the password
-        hashed_password = generate_password_hash(password)
-
+        conn = None
+        cur = None
         try:
-            # Insert into new_users table (added food_type)
+            conn = mysql_pool.get_connection()
+            cur = conn.cursor(dictionary=True)
+
+            # Check for duplicate email/phone
+            cur.execute("SELECT id FROM new_users WHERE email = %s OR phone = %s", (email, phone))
+            existing = cur.fetchone()
+            if existing:
+                flash("⚠️ Email or phone already registered.", "danger")
+                return redirect(url_for('register'))
+
+            # Hash the password
+            hashed_password = generate_password_hash(password)
+
+            # Insert into DB
             cur.execute("""
                 INSERT INTO new_users (name, email, phone, course, password, user_type, food_type)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (name, email, phone, course, hashed_password, user_type, food_type))
             conn.commit()
-            flash("Registration successful! Await admin approval.", "success")
-        except Exception as e:
-            flash(f"Database error: {e}", "danger")
-        finally:
-            cur.close()
-            conn.close()
 
-        return redirect(url_for('login'))
+            flash("✅ Registration successful! Await admin approval.", "success")
+            return redirect(url_for('login'))
+
+        except Exception as e:
+            # Log error to server, but don't show raw DB errors to users
+            app.logger.error(f"Registration error: {e}")
+            flash("❌ Something went wrong. Please try again.", "danger")
+            return redirect(url_for('register'))
+
+        finally:
+            if cur: cur.close()
+            if conn: conn.close()
 
     return render_template('register.html')
+
 
 
 
