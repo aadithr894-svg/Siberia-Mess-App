@@ -116,7 +116,7 @@ document.getElementById("startDate").addEventListener("change", function() {
     const start = new Date(this.value);
     if (isNaN(start)) return;
     const minEnd = new Date(start);
-    minEnd.setDate(start.getDate() + 3);
+    minEnd.setDate(start.getDate() + 2);
     const minEndStr = minEnd.toISOString().split("T")[0];
     document.getElementById("endDate").setAttribute("min", minEndStr);
 
