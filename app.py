@@ -430,77 +430,133 @@ def admin_dashboard():
 
 
 
+from flask import request, flash, redirect, url_for
+from itsdangerous import URLSafeTimedSerializer
+from flask_mail import Message
+from werkzeug.security import generate_password_hash
+
+# Serializer for generating tokens
+s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
 @app.route('/forgot', methods=['GET', 'POST'])
 def forgot():
     if request.method == 'POST':
-        email = request.form['email']
+        email = request.form.get('email')
+        if not email:
+            flash("Please enter your email address.", "danger")
+            return redirect(url_for('forgot'))
 
-        conn = mysql_pool.get_connection()
-        cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
+        try:
+            conn = mysql_pool.get_connection()
+            cur = conn.cursor(dictionary=True)
+            cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+            user = cur.fetchone()
+            cur.close()
+            conn.close()
 
-        if user:
-            # Generate token
-            token = s.dumps(email, salt='password-reset-salt')
-            link = url_for('reset_password', token=token, _external=True)
+            if not user:
+                flash("Email not found.", "danger")
+                return redirect(url_for('forgot'))
 
-            # Send email
-            msg = Message('Mess App Password Reset',
-                          sender=app.config['MAIL_USERNAME'],
-                          recipients=[email])
-            msg.body = f'Click this link to reset your password: {link}'
+            # ✅ Generate token with 1-hour expiry
+            token = s.dumps(email, salt="password-reset-salt")
+            reset_url = url_for('reset_password', token=token, _external=True)
+
+            # ✅ Send reset email
+            msg = Message(
+                subject="Password Reset Request",
+                recipients=[email],
+                html=f"""
+                    <p>Hello {user['name']},</p>
+                    <p>Click the link below to reset your password (valid for 1 hour):</p>
+                    <p><a href="{reset_url}">{reset_url}</a></p>
+                    <p>If you did not request this, please ignore this email.</p>
+                """
+            )
             mail.send(msg)
 
-            flash('Password reset link sent to your email.', 'success')
+            flash("Password reset link sent to your email.", "success")
             return redirect(url_for('login'))
-        else:
-            flash('Email not found.', 'danger')
+
+        except Exception as e:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+            flash(f"Database or email error: {str(e)}", "danger")
+            return redirect(url_for('forgot'))
+
+    # GET: show forgot password form
     return render_template('forgot.html')
 
 
-
-
-
-from flask import request, jsonify, flash, redirect, url_for
-from flask_login import login_required, current_user
+from flask import request, render_template, flash, redirect, url_for
 from werkzeug.security import generate_password_hash
-import MySQLdb
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
-@app.route('/reset_password', methods=['POST'])
-@login_required
+# Make sure you have a secret key for token generation
+s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
+@app.route('/reset_password', methods=['GET', 'POST'])
 def reset_password():
-    # Get new password from form or JSON
-    data = request.get_json(silent=True) or request.form
-    new_password = data.get('new_password')
-    if not new_password:
-        return jsonify({'success': False, 'message': 'Password is required'}), 400
+    token = request.args.get('token') or request.form.get('token')
+    if not token:
+        flash("Invalid or missing token!", "danger")
+        return redirect(url_for('login'))
 
-    # Hash the password
-    hashed_password = generate_password_hash(new_password)  # default: pbkdf2:sha256
+    # ---------------- GET: show form ----------------
+    if request.method == 'GET':
+        try:
+            email = s.loads(token, salt="password-reset-salt", max_age=3600)  # 1 hour expiry
+            return render_template('reset_password.html', token=token, email=email)
+        except SignatureExpired:
+            flash("Token expired. Please request a new password reset.", "danger")
+            return redirect(url_for('forgot'))
+        except BadSignature:
+            flash("Invalid token. Please request a new password reset.", "danger")
+            return redirect(url_for('forgot'))
 
-    conn = None
-    cur = None
-    try:
-        conn = mysql_pool.get_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE users SET password=%s WHERE id=%s",
-            (hashed_password, current_user.id)
-        )
-        conn.commit()
-        return jsonify({'success': True, 'message': 'Password updated successfully ✅'})
-    except MySQLdb.Error as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
-    finally:
-        if cur:
+    # ---------------- POST: update password ----------------
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not password or not confirm_password:
+            flash("Please enter all fields.", "danger")
+            return redirect(url_for('reset_password', token=token))
+
+        if password != confirm_password:
+            flash("Passwords do not match.", "danger")
+            return redirect(url_for('reset_password', token=token))
+
+        try:
+            email = s.loads(token, salt="password-reset-salt", max_age=3600)
+        except SignatureExpired:
+            flash("Token expired. Please request a new password reset.", "danger")
+            return redirect(url_for('forgot'))
+        except BadSignature:
+            flash("Invalid token. Please request a new password reset.", "danger")
+            return redirect(url_for('forgot'))
+
+        # ✅ Hash the password before storing
+        hashed_password = generate_password_hash(password)
+
+        try:
+            conn = mysql_pool.get_connection()
+            cur = conn.cursor()
+            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_password, email))
+            conn.commit()
             cur.close()
-        if conn:
             conn.close()
+            flash("Password has been reset successfully! You can now log in.", "success")
+            return redirect(url_for('login'))
+        except Exception as e:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+            flash(f"Database error: {str(e)}", "danger")
+            return redirect(url_for('forgot'))
 
 
 
