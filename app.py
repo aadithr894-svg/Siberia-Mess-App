@@ -471,35 +471,34 @@ def reset_password(token):
         print(f"[DEBUG] Token valid for email: {email}")
     except Exception as e:
         print(f"[DEBUG] Token error: {e}")
-        flash('The password reset link is invalid or expired.', 'danger')
+        flash('The link is invalid or expired.', 'danger')
         return redirect(url_for('forgot'))
 
     if request.method == 'POST':
-        new_password = request.form.get('password', '').strip()
-        if not new_password or len(new_password) < 6:
-            flash('Password must be at least 6 characters.', 'warning')
-            return render_template('reset.html')
-
         try:
-            # Hash the password using Werkzeug
-            hashed_password = generate_password_hash(new_password)
+            new_password = request.form.get('password', '').strip()
+            print(f"[DEBUG] New password received: {new_password}")
 
-            # Update in MySQL
+            if not new_password or len(new_password) < 6:
+                flash('Password must be at least 6 characters.', 'warning')
+                return render_template('reset.html')
+
+            hashed_password = generate_password_hash(new_password)
+            print(f"[DEBUG] Hashed password: {hashed_password}")
+
             conn = mysql_pool.get_connection()
             cur = conn.cursor()
-            cur.execute(
-                "UPDATE users SET password=%s WHERE email=%s",
-                (hashed_password, email)
-            )
+            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_password, email))
             conn.commit()
             cur.close()
             conn.close()
+            print("[DEBUG] Password updated successfully")
 
-            flash('Password reset successfully! You can now login.', 'success')
+            flash('Password reset successfully!', 'success')
             return redirect(url_for('login'))
 
-        except Exception as db_err:
-            print(f"[DEBUG] Database error: {db_err}")
+        except Exception as e:
+            print(f"[DEBUG] Database error: {e}")
             flash('Error updating password. Contact admin.', 'danger')
             return render_template('reset.html')
 
