@@ -1649,10 +1649,10 @@ def update_menu():
 from flask import request, render_template, redirect, url_for, flash
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
-
+import Mail
 # Serializer for generating and validating tokens
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
-
+mail = Mail(app)
 @app.route('/forgot', methods=['GET', 'POST'])
 def forgot():
     if request.method == 'POST':
