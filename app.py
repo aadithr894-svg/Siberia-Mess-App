@@ -467,44 +467,46 @@ def forgot():
 @app.route('/reset/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     try:
-        # Verify token (expires in 30 minutes)
+        # Verify token
         email = s.loads(token, salt='password-reset-salt', max_age=1800)
     except Exception as e:
-        print(f"Token error: {e}")  # For debugging
-        flash('The password reset link is invalid or has expired.', 'danger')
+        print(f"[Token Error] {e}")
+        flash('The password reset link is invalid or expired.', 'danger')
         return redirect(url_for('forgot'))
 
     if request.method == 'POST':
-        new_password = request.form['password']
+        new_password = request.form.get('password', '').strip()
 
         if not new_password or len(new_password) < 6:
-            flash('Password must be at least 6 characters long.', 'warning')
+            flash('Password must be at least 6 characters.', 'warning')
             return render_template('reset.html')
 
         try:
-            # Hash password
+            # Hash the password
             hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+            hashed_password_str = hashed_password.decode('utf-8')
 
-            # Update password in MySQL
+            # Update in MySQL
             conn = mysql_pool.get_connection()
             cur = conn.cursor()
             cur.execute(
                 "UPDATE users SET password=%s WHERE email=%s",
-                (hashed_password.decode('utf-8'), email)
+                (hashed_password_str, email)
             )
             conn.commit()
             cur.close()
             conn.close()
 
-            flash('Your password has been reset successfully! You can now log in.', 'success')
+            flash('Password reset successfully! You can now login.', 'success')
             return redirect(url_for('login'))
 
-        except Exception as db_err:
-            print(f"Database error: {db_err}")  # For debugging
-            flash('An error occurred while resetting your password. Please try again.', 'danger')
+        except Exception as e:
+            print(f"[Database Error] {e}")
+            flash('Error updating password. Please contact admin.', 'danger')
             return render_template('reset.html')
 
     return render_template('reset.html')
+
 
 
 # -------- ADMIN: USERS LIST --------
