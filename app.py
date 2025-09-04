@@ -464,45 +464,74 @@ def forgot():
 
 
 
-@app.route('/reset/<token>', methods=['GET', 'POST'])
-def reset_password(token):
+from flask import Flask, request, jsonify, flash, redirect, url_for
+from flask_login import login_required
+from werkzeug.security import generate_password_hash
+import MySQLdb
+
+@app.route('/reset_password', methods=['POST'])
+@login_required
+def reset_password():
+    # 1️⃣ Get form data safely
+    data = request.form or request.get_json(silent=True)
+    if not data:
+        return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    confirm_password = data.get('confirm_password')
+
+    if not old_password or not new_password or not confirm_password:
+        return jsonify({'success': False, 'message': 'All password fields are required'}), 400
+
+    if new_password != confirm_password:
+        return jsonify({'success': False, 'message': 'Passwords do not match'}), 400
+
+    # Optional: Add minimum password length check
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'message': 'Password too short (min 6 chars)'}), 400
+
+    conn = None
+    cur = None
     try:
-        email = s.loads(token, salt='password-reset-salt', max_age=1800)
-        print(f"[DEBUG] Token valid for email: {email}")
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor(MySQLdb.cursors.DictCursor)
+
+        # 2️⃣ Fetch current hashed password from DB
+        cur.execute("SELECT password FROM users WHERE id=%s", (current_user.id,))
+        user = cur.fetchone()
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        # Optional: Verify old password if stored hashed
+        # from werkzeug.security import check_password_hash
+        # if not check_password_hash(user['password'], old_password):
+        #     return jsonify({'success': False, 'message': 'Old password incorrect'}), 403
+
+        # 3️⃣ Hash new password
+        hashed_pw = generate_password_hash(new_password)
+
+        # 4️⃣ Update DB
+        cur.execute("UPDATE users SET password=%s WHERE id=%s", (hashed_pw, current_user.id))
+        conn.commit()
+
+        return jsonify({'success': True, 'message': 'Password reset successfully ✅'})
+
+    except MySQLdb.Error as e:
+        if conn:
+            conn.rollback()
+        print("Database error in password reset:", e)
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+
     except Exception as e:
-        print(f"[DEBUG] Token error: {e}")
-        flash('The link is invalid or expired.', 'danger')
-        return redirect(url_for('forgot'))
+        print("Unexpected error in password reset:", e)
+        return jsonify({'success': False, 'message': f'Unexpected error: {str(e)}'}), 500
 
-    if request.method == 'POST':
-        try:
-            new_password = request.form.get('password', '').strip()
-            print(f"[DEBUG] New password received: {new_password}")
-
-            if not new_password or len(new_password) < 6:
-                flash('Password must be at least 6 characters.', 'warning')
-                return render_template('reset.html')
-
-            hashed_password = generate_password_hash(new_password)
-            print(f"[DEBUG] Hashed password: {hashed_password}")
-
-            conn = mysql_pool.get_connection()
-            cur = conn.cursor()
-            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_password, email))
-            conn.commit()
+    finally:
+        if cur:
             cur.close()
+        if conn:
             conn.close()
-            print("[DEBUG] Password updated successfully")
-
-            flash('Password reset successfully!', 'success')
-            return redirect(url_for('login'))
-
-        except Exception as e:
-            print(f"[DEBUG] Database error: {e}")
-            flash('Error updating password. Contact admin.', 'danger')
-            return render_template('reset.html')
-
-    return render_template('reset.html')
 
 
 # -------- ADMIN: USERS LIST --------
