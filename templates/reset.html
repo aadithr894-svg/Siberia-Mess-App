@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reset Password - Mess App</title>
+  <title>Reset Password</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -19,7 +19,7 @@
       backdrop-filter: blur(10px);
       padding: 2rem;
       border-radius: 1rem;
-      width: 24rem;
+      width: 22rem;
       box-shadow: 0 10px 25px rgba(0,0,0,0.1);
     }
     .flash {
@@ -52,14 +52,12 @@
 
     <form method="POST" class="space-y-4">
       <div>
-        <input type="password" name="password" placeholder="New Password" required
-               class="w-full p-2 rounded border focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        <input type="password" name="password" placeholder="New Password" required class="w-full p-2 rounded border">
       </div>
-
-      <button type="submit"
-              class="w-full p-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">
-        Reset Password
-      </button>
+      <div>
+        <input type="password" name="confirm_password" placeholder="Confirm Password" required class="w-full p-2 rounded border">
+      </div>
+      <button type="submit" class="w-full p-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">Reset Password</button>
     </form>
 
     <p class="mt-4 text-center text-gray-700 text-sm">
