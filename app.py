@@ -464,74 +464,44 @@ def forgot():
 
 
 
-from flask import Flask, request, jsonify, flash, redirect, url_for
-from flask_login import login_required
+from flask import request, jsonify, flash, redirect, url_for
+from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
 import MySQLdb
 
 @app.route('/reset_password', methods=['POST'])
 @login_required
 def reset_password():
-    # 1️⃣ Get form data safely
-    data = request.form or request.get_json(silent=True)
-    if not data:
-        return jsonify({'success': False, 'message': 'No data provided'}), 400
-
-    old_password = data.get('old_password')
+    # Get new password from form or JSON
+    data = request.get_json(silent=True) or request.form
     new_password = data.get('new_password')
-    confirm_password = data.get('confirm_password')
+    if not new_password:
+        return jsonify({'success': False, 'message': 'Password is required'}), 400
 
-    if not old_password or not new_password or not confirm_password:
-        return jsonify({'success': False, 'message': 'All password fields are required'}), 400
-
-    if new_password != confirm_password:
-        return jsonify({'success': False, 'message': 'Passwords do not match'}), 400
-
-    # Optional: Add minimum password length check
-    if len(new_password) < 6:
-        return jsonify({'success': False, 'message': 'Password too short (min 6 chars)'}), 400
+    # Hash the password
+    hashed_password = generate_password_hash(new_password)  # default: pbkdf2:sha256
 
     conn = None
     cur = None
     try:
         conn = mysql_pool.get_connection()
-        cur = conn.cursor(MySQLdb.cursors.DictCursor)
-
-        # 2️⃣ Fetch current hashed password from DB
-        cur.execute("SELECT password FROM users WHERE id=%s", (current_user.id,))
-        user = cur.fetchone()
-        if not user:
-            return jsonify({'success': False, 'message': 'User not found'}), 404
-
-        # Optional: Verify old password if stored hashed
-        # from werkzeug.security import check_password_hash
-        # if not check_password_hash(user['password'], old_password):
-        #     return jsonify({'success': False, 'message': 'Old password incorrect'}), 403
-
-        # 3️⃣ Hash new password
-        hashed_pw = generate_password_hash(new_password)
-
-        # 4️⃣ Update DB
-        cur.execute("UPDATE users SET password=%s WHERE id=%s", (hashed_pw, current_user.id))
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE users SET password=%s WHERE id=%s",
+            (hashed_password, current_user.id)
+        )
         conn.commit()
-
-        return jsonify({'success': True, 'message': 'Password reset successfully ✅'})
-
+        return jsonify({'success': True, 'message': 'Password updated successfully ✅'})
     except MySQLdb.Error as e:
         if conn:
             conn.rollback()
-        print("Database error in password reset:", e)
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
-
-    except Exception as e:
-        print("Unexpected error in password reset:", e)
-        return jsonify({'success': False, 'message': f'Unexpected error: {str(e)}'}), 500
-
     finally:
         if cur:
             cur.close()
         if conn:
             conn.close()
+
 
 
 # -------- ADMIN: USERS LIST --------
