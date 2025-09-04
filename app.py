@@ -597,39 +597,41 @@ def apply_mess_cut():
             return redirect(url_for('apply_mess_cut'))
 
         # ---------------- POOL CONNECTION ----------------
-        conn = mysql_pool.get_connection()            # Get connection from pool
-        cur = conn.cursor(dictionary=True)            # DictCursor equivalent
+        conn = mysql_pool.get_connection()  # Get connection from pool
 
         try:
-            # Check overlapping
-            cur.execute("""
-                SELECT * FROM mess_cut
-                WHERE user_id=%s AND (
-                    (start_date <= %s AND end_date >= %s) OR
-                    (start_date <= %s AND end_date >= %s) OR
-                    (start_date >= %s AND end_date <= %s)
-                )
-            """, (current_user.id, start_date, start_date, end_date, end_date, start_date, end_date))
-            overlapping = cur.fetchone()
-            if overlapping:
-                flash("You already have a mess cut that overlaps these dates.", "danger")
-                return redirect(url_for('apply_mess_cut'))
+            # Use buffered cursor to avoid "Unread result found"
+            with conn.cursor(dictionary=True, buffered=True) as cur:
+                # Check overlapping
+                cur.execute("""
+                    SELECT * FROM mess_cut
+                    WHERE user_id=%s AND (
+                        (start_date <= %s AND end_date >= %s) OR
+                        (start_date <= %s AND end_date >= %s) OR
+                        (start_date >= %s AND end_date <= %s)
+                    )
+                """, (current_user.id, start_date, start_date, end_date, end_date, start_date, end_date))
+                overlapping = cur.fetchone()
+                if overlapping:
+                    flash("You already have a mess cut that overlaps these dates.", "danger")
+                    return redirect(url_for('apply_mess_cut'))
 
-            # Fetch user's course
-            cur.execute("SELECT course FROM users WHERE id=%s", (current_user.id,))
-            user = cur.fetchone()
-            if not user or not user.get('course'):
-                flash("Course not found. Please update your profile.", "danger")
-                return redirect(url_for('apply_mess_cut'))
+                # Fetch user's course
+                cur.execute("SELECT course FROM users WHERE id=%s", (current_user.id,))
+                user = cur.fetchone()
+                if not user or not user.get('course'):
+                    flash("Course not found. Please update your profile.", "danger")
+                    return redirect(url_for('apply_mess_cut'))
 
-            course = user['course']
+                course = user['course']
 
-            # Insert mess cut
-            cur.execute("""
-                INSERT INTO mess_cut (user_id, start_date, end_date, course, date_applied)
-                VALUES (%s, %s, %s, %s, NOW())
-            """, (current_user.id, start_date, end_date, course))
-            conn.commit()
+                # Insert mess cut
+                cur.execute("""
+                    INSERT INTO mess_cut (user_id, start_date, end_date, course, date_applied)
+                    VALUES (%s, %s, %s, %s, NOW())
+                """, (current_user.id, start_date, end_date, course))
+                conn.commit()
+
             flash("Mess cut applied successfully!", "success")
             return redirect(url_for('my_mess_cuts'))
 
@@ -640,8 +642,7 @@ def apply_mess_cut():
             return redirect(url_for('apply_mess_cut'))
 
         finally:
-            cur.close()
-            conn.close()                              # Return connection to pool
+            conn.close()  # Return connection to pool
 
     # GET request: render form
     return render_template(
