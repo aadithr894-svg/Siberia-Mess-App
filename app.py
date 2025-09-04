@@ -522,57 +522,46 @@ def forgot():
 
 
 
-from werkzeug.security import generate_password_hash
-from itsdangerous import SignatureExpired, BadSignature
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
-@app.route('/reset_password/<token>', methods=['GET', 'POST'])
-def reset_password(token):
+@app.route('/reset_password', methods=['GET', 'POST'])
+def reset_password():
+    token = request.args.get('token')  # token comes from the email link
+
+    if not token:
+        flash("Invalid or missing token.", "danger")
+        return redirect(url_for('login'))
+
     try:
-        email = s.loads(token, salt='password-reset-salt', max_age=1800)  # 30 mins
+        # Check token validity (expires in 1 hour)
+        email = s.loads(token, salt='password-reset-salt', max_age=3600)
     except SignatureExpired:
-        flash("The reset link has expired.", "danger")
+        flash("The reset link has expired.", "warning")
         return redirect(url_for('forgot'))
     except BadSignature:
-        flash("Invalid reset link.", "danger")
+        flash("Invalid reset token.", "danger")
         return redirect(url_for('forgot'))
 
     if request.method == 'POST':
-        password = request.form.get('password')
-        confirm = request.form.get('confirm_password')
+        new_password = request.form['password']
+        hashed_password = generate_password_hash(new_password)
 
-        if not password or not confirm:
-            flash("Please fill out all fields", "warning")
-            return redirect(url_for('reset_password', token=token))
-
-        if password != confirm:
-            flash("Passwords do not match", "danger")
-            return redirect(url_for('reset_password', token=token))
-
-        hashed_pw = generate_password_hash(password)
-
-        conn = None
-        cur = None
+        # Update the user's password in DB
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor()
         try:
-            conn = mysql_pool.get_connection()
-            cur = conn.cursor()
-            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_pw, email))
+            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_password, email))
             conn.commit()
-            flash("Password reset successful! You can now log in.", "success")
+            flash("Password reset successful!", "success")
             return redirect(url_for('login'))
-
         except Exception as e:
-            if conn:
-                conn.rollback()
-            flash(f"Error resetting password: {str(e)}", "danger")
-            return redirect(url_for('forgot'))
-
+            flash(f"Database error: {e}", "danger")
         finally:
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()
+            cur.close()
+            conn.close()
 
-    return render_template('reset_password.html')
+    # If GET, just show the reset form
+    return render_template('reset.html')
 
 
 
