@@ -9,7 +9,7 @@ from config import Config
 from mysql.connector import pooling
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer
-import bcrypt
+
 
 
 # ---------------- Flask App ----------------
