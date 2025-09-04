@@ -1645,6 +1645,109 @@ def update_menu():
         return jsonify({"message": f"Database error: {str(e)}"}), 500
 
 
+
+from flask import request, render_template, redirect, url_for, flash
+from flask_mail import Message
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+
+# Serializer for generating and validating tokens
+s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
+@app.route('/forgot', methods=['GET', 'POST'])
+def forgot():
+    if request.method == 'POST':
+        email = request.form.get('email')
+
+        if not email:
+            flash("Please enter your email.", "danger")
+            return redirect(url_for('forgot'))
+
+        # Check if the email exists in the users table
+        conn = None
+        cur = None
+        try:
+            conn = mysql_pool.get_connection()
+            cur = conn.cursor(dictionary=True)
+            cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+            user = cur.fetchone()
+
+            if not user:
+                flash("Email not found.", "danger")
+                return redirect(url_for('forgot'))
+
+            # Generate token valid for 30 minutes
+            token = s.dumps(email, salt='password-reset-salt')
+            reset_url = url_for('reset_password', token=token, _external=True)
+
+            # Prepare email
+            msg = Message(
+                subject="Password Reset Request",
+                recipients=[email],
+                body=f"Hello {user['name']},\n\nTo reset your password, click the link below:\n{reset_url}\n\nThis link is valid for 30 minutes.",
+                sender=app.config['MAIL_DEFAULT_SENDER']
+            )
+
+            mail.send(msg)
+            flash("Password reset link has been sent to your email.", "success")
+            return redirect(url_for('login'))
+
+        except Exception as e:
+            flash(f"Error sending email: {str(e)}", "danger")
+            return redirect(url_for('forgot'))
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()  # Return connection to pool
+
+    return render_template('forgot.html')
+
+
+
+
+
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    try:
+        # Validate the token (expires in 1 hour)
+        email = s.loads(token, salt='password-reset-salt', max_age=3600)
+    except Exception:
+        flash("Invalid or expired link.", "danger")
+        return redirect(url_for('forgot'))
+
+    if request.method == 'POST':
+        new_password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not new_password or new_password != confirm_password:
+            flash("Passwords do not match.", "danger")
+            return render_template('reset.html', token=token)
+
+        # Hash the new password
+        hashed_password = generate_password_hash(new_password)
+
+        # Update the user's password in DB
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_password, email))
+            conn.commit()
+            flash("Password updated successfully! You can now log in.", "success")
+        except Exception as e:
+            flash(f"Database error: {str(e)}", "danger")
+            return render_template('reset.html', token=token)
+        finally:
+            cur.close()
+            conn.close()
+
+        return redirect(url_for('login'))
+
+    return render_template('reset.html', token=token)
+
+
+
 # ----------------- START APP -----------------
 # ----------------- START APP -----------------
 if __name__ == '__main__':
