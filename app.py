@@ -7,6 +7,10 @@ import base64
 from datetime import datetime, time
 from config import Config
 from mysql.connector import pooling
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer
+import bcrypt
+
 
 # ---------------- Flask App ----------------
 app = Flask(__name__)
@@ -25,7 +29,10 @@ dbconfig = {
     "database": os.environ.get("MYSQL_DB"),
     "port": int(os.environ.get("MYSQL_PORT", 3306))
 }
+mail = Mail(app)
 
+# Token serializer
+s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 # --- Setup MySQL connection pool ---
 try:
     mysql_pool = pooling.MySQLConnectionPool(
@@ -421,6 +428,66 @@ def admin_dashboard():
         return redirect(url_for('user_dashboard'))
     return render_template('admin_base.html')
 
+
+
+@app.route('/forgot', methods=['GET', 'POST'])
+def forgot():
+    if request.method == 'POST':
+        email = request.form['email']
+
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if user:
+            # Generate token
+            token = s.dumps(email, salt='password-reset-salt')
+            link = url_for('reset_password', token=token, _external=True)
+
+            # Send email
+            msg = Message('Mess App Password Reset',
+                          sender=app.config['MAIL_USERNAME'],
+                          recipients=[email])
+            msg.body = f'Click this link to reset your password: {link}'
+            mail.send(msg)
+
+            flash('Password reset link sent to your email.', 'success')
+            return redirect(url_for('login'))
+        else:
+            flash('Email not found.', 'danger')
+    return render_template('forgot.html')
+
+
+
+
+
+@app.route('/reset/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    try:
+        email = s.loads(token, salt='password-reset-salt', max_age=1800)
+    except:
+        flash('The link is invalid or expired.', 'danger')
+        return redirect(url_for('forgot'))
+
+    if request.method == 'POST':
+        new_password = request.form['password']
+        hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET password=%s WHERE email=%s",
+                    (hashed_password.decode('utf-8'), email))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        flash('Password updated successfully! You can now log in.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('reset.html')
 
 
 # -------- ADMIN: USERS LIST --------

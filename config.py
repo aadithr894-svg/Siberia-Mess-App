@@ -11,3 +11,8 @@ class Config:
 
     # Flask secret key (set this in Render as well)
     SECRET_KEY = os.environ.get('SECRET_KEY', 'supersecretkey')
+    MAIL_SERVER = 'smtp.gmail.com'
+    MAIL_PORT = 587
+    MAIL_USE_TLS = True
+    MAIL_USERNAME = 'messsiberia@gmail.com'        # your Gmail
+    MAIL_PASSWORD = 'khbb aspa fumw fdjj' # App Password you generated

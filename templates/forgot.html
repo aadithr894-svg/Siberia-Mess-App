@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mess Login</title>
+  <title>Forgot Password - Mess App</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -15,11 +15,11 @@
       align-items: center;
     }
     .card {
-      background: rgba(255,255,255,0.8);
+      background: rgba(255,255,255,0.85);
       backdrop-filter: blur(10px);
       padding: 2rem;
       border-radius: 1rem;
-      width: 22rem;
+      width: 24rem;
       box-shadow: 0 10px 25px rgba(0,0,0,0.1);
     }
     .flash {
@@ -37,7 +37,7 @@
 </head>
 <body>
   <div class="card">
-    <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
+    <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Forgot Password</h2>
 
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -50,25 +50,21 @@
       {% endif %}
     {% endwith %}
 
-    <form method="POST" action="{{ url_for('login') }}" class="space-y-4">
+    <form method="POST" class="space-y-4">
       <div>
-        <input type="email" name="email" placeholder="Email" required class="w-full p-2 rounded border">
-      </div>
-      <div>
-        <input type="password" name="password" placeholder="Password" required class="w-full p-2 rounded border">
+        <input type="email" name="email" placeholder="Enter your email" required
+               class="w-full p-2 rounded border focus:outline-none focus:ring-2 focus:ring-indigo-400">
       </div>
 
-      <!-- Forgot Password Link -->
-      <div class="text-right text-sm">
-        <a href="{{ url_for('forgot') }}" class="text-indigo-500 hover:underline">Forgot Password?</a>
-      </div>
-
-      <button type="submit" class="w-full p-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">Login</button>
+      <button type="submit"
+              class="w-full p-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">
+        Send Reset Link
+      </button>
     </form>
 
     <p class="mt-4 text-center text-gray-700 text-sm">
-      Don't have an account? 
-      <a href="{{ url_for('register') }}" class="text-indigo-500 hover:underline">Sign Up</a>
+      Remembered your password? 
+      <a href="{{ url_for('login') }}" class="text-indigo-500 hover:underline">Login</a>
     </p>
   </div>
 </body>
