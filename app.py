@@ -208,35 +208,68 @@ def new_users_list():
 
 
 # ---------------- LOGIN ----------------
+from werkzeug.security import check_password_hash
+from flask_login import login_user
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
+        email = request.form.get('email')
+        password = request.form.get('password')
 
-        conn = mysql_pool.get_connection()       # Get connection from pool
-        cur = conn.cursor(dictionary=True)      # DictCursor equivalent
-        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()                            # Return connection to pool
+        conn = None
+        cur = None
+        try:
+            # Get connection from pool
+            conn = mysql_pool.get_connection()
+            cur = conn.cursor(dictionary=True)
+            cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+            user = cur.fetchone()
 
-        if user and check_password_hash(user['password'], password):
-            # Admin bypass approval check
-            if user['user_type'] != "admin" and user['approved'] == 0:
-                flash("Your account is awaiting admin approval.", "warning")
+            if not user:
+                flash("Invalid credentials", "danger")
                 return redirect(url_for('login'))
 
-            login_user(User(user['id'], user['name'], user['email'], user['user_type']))
-            flash("Login successful!", "success")
-
-            if user['user_type'] == "admin":
-                return redirect(url_for('admin_dashboard'))
+            # Check if password is hashed (avoids ValueError)
+            stored_password = user.get('password', '')
+            if stored_password.startswith('pbkdf2:sha256:') or stored_password.startswith('bcrypt:'):
+                password_valid = check_password_hash(stored_password, password)
             else:
-                return redirect(url_for('user_dashboard'))
-        else:
-            flash("Invalid credentials", "danger")
+                # If stored password is plaintext (legacy), compare directly and re-hash
+                password_valid = (stored_password == password)
+                if password_valid:
+                    # Hash the legacy password and update DB
+                    from werkzeug.security import generate_password_hash
+                    hashed_pw = generate_password_hash(password)
+                    cur.execute("UPDATE users SET password=%s WHERE id=%s", (hashed_pw, user['id']))
+                    conn.commit()
+
+            if password_valid:
+                # Admin bypass approval check
+                if user['user_type'] != "admin" and user['approved'] == 0:
+                    flash("Your account is awaiting admin approval.", "warning")
+                    return redirect(url_for('login'))
+
+                login_user(User(user['id'], user['name'], user['email'], user['user_type']))
+                flash("Login successful!", "success")
+
+                if user['user_type'] == "admin":
+                    return redirect(url_for('admin_dashboard'))
+                else:
+                    return redirect(url_for('user_dashboard'))
+            else:
+                flash("Invalid credentials", "danger")
+                return redirect(url_for('login'))
+
+        except Exception as e:
+            flash(f"Login error: {str(e)}", "danger")
             return redirect(url_for('login'))
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()  # Return connection to pool
 
     return render_template('login.html')
 
@@ -431,9 +464,9 @@ def admin_dashboard():
 
 
 from flask import request, flash, redirect, url_for
-from itsdangerous import URLSafeTimedSerializer
 from flask_mail import Message
-from werkzeug.security import generate_password_hash
+from itsdangerous import URLSafeTimedSerializer
+from datetime import datetime, timedelta
 
 # Serializer for generating tokens
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
@@ -442,121 +475,105 @@ s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 def forgot():
     if request.method == 'POST':
         email = request.form.get('email')
+
         if not email:
-            flash("Please enter your email address.", "danger")
+            flash("Please enter your email", "warning")
             return redirect(url_for('forgot'))
 
+        conn = None
+        cur = None
         try:
             conn = mysql_pool.get_connection()
             cur = conn.cursor(dictionary=True)
-            cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+            cur.execute("SELECT id, name FROM users WHERE email=%s", (email,))
             user = cur.fetchone()
-            cur.close()
-            conn.close()
 
             if not user:
-                flash("Email not found.", "danger")
+                flash("No account found with this email", "danger")
                 return redirect(url_for('forgot'))
 
-            # ✅ Generate token with 1-hour expiry
-            token = s.dumps(email, salt="password-reset-salt")
-            reset_url = url_for('reset_password', token=token, _external=True)
+            # Generate a secure token valid for 30 mins
+            token = s.dumps(email, salt='password-reset-salt')
 
-            # ✅ Send reset email
+            reset_link = url_for('reset_password', token=token, _external=True)
+
+            # Send email
             msg = Message(
-                subject="Password Reset Request",
+                subject="Reset Your Password",
+                sender=app.config['MAIL_USERNAME'],  # Use default sender
                 recipients=[email],
-                html=f"""
-                    <p>Hello {user['name']},</p>
-                    <p>Click the link below to reset your password (valid for 1 hour):</p>
-                    <p><a href="{reset_url}">{reset_url}</a></p>
-                    <p>If you did not request this, please ignore this email.</p>
-                """
+                body=f"Hello {user['name']},\n\nClick the link to reset your password:\n{reset_link}\n\nThis link expires in 30 minutes."
             )
             mail.send(msg)
-
-            flash("Password reset link sent to your email.", "success")
+            flash("Password reset email sent! Check your inbox.", "success")
             return redirect(url_for('login'))
 
         except Exception as e:
+            flash(f"Error sending reset email: {str(e)}", "danger")
+            return redirect(url_for('forgot'))
+
+        finally:
             if cur:
                 cur.close()
             if conn:
                 conn.close()
-            flash(f"Database or email error: {str(e)}", "danger")
-            return redirect(url_for('forgot'))
 
-    # GET: show forgot password form
     return render_template('forgot.html')
 
 
-from flask import request, render_template, flash, redirect, url_for
+
 from werkzeug.security import generate_password_hash
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+from itsdangerous import SignatureExpired, BadSignature
 
-# Make sure you have a secret key for token generation
-s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    try:
+        email = s.loads(token, salt='password-reset-salt', max_age=1800)  # 30 mins
+    except SignatureExpired:
+        flash("The reset link has expired.", "danger")
+        return redirect(url_for('forgot'))
+    except BadSignature:
+        flash("Invalid reset link.", "danger")
+        return redirect(url_for('forgot'))
 
-@app.route('/reset_password', methods=['GET', 'POST'])
-def reset_password():
-    token = request.args.get('token') or request.form.get('token')
-    if not token:
-        flash("Invalid or missing token!", "danger")
-        return redirect(url_for('login'))
-
-    # ---------------- GET: show form ----------------
-    if request.method == 'GET':
-        try:
-            email = s.loads(token, salt="password-reset-salt", max_age=3600)  # 1 hour expiry
-            return render_template('reset_password.html', token=token, email=email)
-        except SignatureExpired:
-            flash("Token expired. Please request a new password reset.", "danger")
-            return redirect(url_for('forgot'))
-        except BadSignature:
-            flash("Invalid token. Please request a new password reset.", "danger")
-            return redirect(url_for('forgot'))
-
-    # ---------------- POST: update password ----------------
     if request.method == 'POST':
         password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
+        confirm = request.form.get('confirm_password')
 
-        if not password or not confirm_password:
-            flash("Please enter all fields.", "danger")
+        if not password or not confirm:
+            flash("Please fill out all fields", "warning")
             return redirect(url_for('reset_password', token=token))
 
-        if password != confirm_password:
-            flash("Passwords do not match.", "danger")
+        if password != confirm:
+            flash("Passwords do not match", "danger")
             return redirect(url_for('reset_password', token=token))
 
-        try:
-            email = s.loads(token, salt="password-reset-salt", max_age=3600)
-        except SignatureExpired:
-            flash("Token expired. Please request a new password reset.", "danger")
-            return redirect(url_for('forgot'))
-        except BadSignature:
-            flash("Invalid token. Please request a new password reset.", "danger")
-            return redirect(url_for('forgot'))
+        hashed_pw = generate_password_hash(password)
 
-        # ✅ Hash the password before storing
-        hashed_password = generate_password_hash(password)
-
+        conn = None
+        cur = None
         try:
             conn = mysql_pool.get_connection()
             cur = conn.cursor()
-            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_password, email))
+            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_pw, email))
             conn.commit()
-            cur.close()
-            conn.close()
-            flash("Password has been reset successfully! You can now log in.", "success")
+            flash("Password reset successful! You can now log in.", "success")
             return redirect(url_for('login'))
+
         except Exception as e:
+            if conn:
+                conn.rollback()
+            flash(f"Error resetting password: {str(e)}", "danger")
+            return redirect(url_for('forgot'))
+
+        finally:
             if cur:
                 cur.close()
             if conn:
                 conn.close()
-            flash(f"Database error: {str(e)}", "danger")
-            return redirect(url_for('forgot'))
+
+    return render_template('reset_password.html')
+
 
 
 

@@ -16,3 +16,4 @@ class Config:
     MAIL_USE_TLS = True
     MAIL_USERNAME = 'messsiberia@gmail.com'        # your Gmail
     MAIL_PASSWORD = 'khbb aspa fumw fdjj' # App Password you generated
+    MAIL_DEFAULT_SENDER = 'messsiberia@gmail.com'
