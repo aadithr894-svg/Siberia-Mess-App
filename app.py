@@ -7,10 +7,6 @@ import base64
 from datetime import datetime, time
 from config import Config
 from mysql.connector import pooling
-from flask_mail import Mail, Message
-from itsdangerous import URLSafeTimedSerializer
-
-
 
 # ---------------- Flask App ----------------
 app = Flask(__name__)
@@ -29,10 +25,7 @@ dbconfig = {
     "database": os.environ.get("MYSQL_DB"),
     "port": int(os.environ.get("MYSQL_PORT", 3306))
 }
-mail = Mail(app)
 
-# Token serializer
-s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 # --- Setup MySQL connection pool ---
 try:
     mysql_pool = pooling.MySQLConnectionPool(
@@ -208,68 +201,35 @@ def new_users_list():
 
 
 # ---------------- LOGIN ----------------
-from werkzeug.security import check_password_hash
-from flask_login import login_user
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
+        email = request.form['email']
+        password = request.form['password']
 
-        conn = None
-        cur = None
-        try:
-            # Get connection from pool
-            conn = mysql_pool.get_connection()
-            cur = conn.cursor(dictionary=True)
-            cur.execute("SELECT * FROM users WHERE email=%s", (email,))
-            user = cur.fetchone()
+        conn = mysql_pool.get_connection()       # Get connection from pool
+        cur = conn.cursor(dictionary=True)      # DictCursor equivalent
+        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()                            # Return connection to pool
 
-            if not user:
-                flash("Invalid credentials", "danger")
+        if user and check_password_hash(user['password'], password):
+            # Admin bypass approval check
+            if user['user_type'] != "admin" and user['approved'] == 0:
+                flash("Your account is awaiting admin approval.", "warning")
                 return redirect(url_for('login'))
 
-            # Check if password is hashed (avoids ValueError)
-            stored_password = user.get('password', '')
-            if stored_password.startswith('pbkdf2:sha256:') or stored_password.startswith('bcrypt:'):
-                password_valid = check_password_hash(stored_password, password)
+            login_user(User(user['id'], user['name'], user['email'], user['user_type']))
+            flash("Login successful!", "success")
+
+            if user['user_type'] == "admin":
+                return redirect(url_for('admin_dashboard'))
             else:
-                # If stored password is plaintext (legacy), compare directly and re-hash
-                password_valid = (stored_password == password)
-                if password_valid:
-                    # Hash the legacy password and update DB
-                    from werkzeug.security import generate_password_hash
-                    hashed_pw = generate_password_hash(password)
-                    cur.execute("UPDATE users SET password=%s WHERE id=%s", (hashed_pw, user['id']))
-                    conn.commit()
-
-            if password_valid:
-                # Admin bypass approval check
-                if user['user_type'] != "admin" and user['approved'] == 0:
-                    flash("Your account is awaiting admin approval.", "warning")
-                    return redirect(url_for('login'))
-
-                login_user(User(user['id'], user['name'], user['email'], user['user_type']))
-                flash("Login successful!", "success")
-
-                if user['user_type'] == "admin":
-                    return redirect(url_for('admin_dashboard'))
-                else:
-                    return redirect(url_for('user_dashboard'))
-            else:
-                flash("Invalid credentials", "danger")
-                return redirect(url_for('login'))
-
-        except Exception as e:
-            flash(f"Login error: {str(e)}", "danger")
+                return redirect(url_for('user_dashboard'))
+        else:
+            flash("Invalid credentials", "danger")
             return redirect(url_for('login'))
-
-        finally:
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()  # Return connection to pool
 
     return render_template('login.html')
 
@@ -460,109 +420,6 @@ def admin_dashboard():
         flash("Unauthorized", "danger")
         return redirect(url_for('user_dashboard'))
     return render_template('admin_base.html')
-
-
-
-from flask import request, flash, redirect, url_for
-from flask_mail import Message
-from itsdangerous import URLSafeTimedSerializer
-from datetime import datetime, timedelta
-
-# Serializer for generating tokens
-s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
-
-@app.route('/forgot', methods=['GET', 'POST'])
-def forgot():
-    if request.method == 'POST':
-        email = request.form.get('email')
-
-        if not email:
-            flash("Please enter your email", "warning")
-            return redirect(url_for('forgot'))
-
-        conn = None
-        cur = None
-        try:
-            conn = mysql_pool.get_connection()
-            cur = conn.cursor(dictionary=True)
-            cur.execute("SELECT id, name FROM users WHERE email=%s", (email,))
-            user = cur.fetchone()
-
-            if not user:
-                flash("No account found with this email", "danger")
-                return redirect(url_for('forgot'))
-
-            # Generate a secure token valid for 30 mins
-            token = s.dumps(email, salt='password-reset-salt')
-
-            reset_link = url_for('reset_password', token=token, _external=True)
-
-            # Send email
-            msg = Message(
-                subject="Reset Your Password",
-                sender=app.config['MAIL_USERNAME'],  # Use default sender
-                recipients=[email],
-                body=f"Hello {user['name']},\n\nClick the link to reset your password:\n{reset_link}\n\nThis link expires in 30 minutes."
-            )
-            mail.send(msg)
-            flash("Password reset email sent! Check your inbox.", "success")
-            return redirect(url_for('login'))
-
-        except Exception as e:
-            flash(f"Error sending reset email: {str(e)}", "danger")
-            return redirect(url_for('forgot'))
-
-        finally:
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()
-
-    return render_template('forgot.html')
-
-
-
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
-
-@app.route('/reset_password', methods=['GET', 'POST'])
-def reset_password():
-    token = request.args.get('token')  # token comes from the email link
-
-    if not token:
-        flash("Invalid or missing token.", "danger")
-        return redirect(url_for('login'))
-
-    try:
-        # Check token validity (expires in 1 hour)
-        email = s.loads(token, salt='password-reset-salt', max_age=3600)
-    except SignatureExpired:
-        flash("The reset link has expired.", "warning")
-        return redirect(url_for('forgot'))
-    except BadSignature:
-        flash("Invalid reset token.", "danger")
-        return redirect(url_for('forgot'))
-
-    if request.method == 'POST':
-        new_password = request.form['password']
-        hashed_password = generate_password_hash(new_password)
-
-        # Update the user's password in DB
-        conn = mysql_pool.get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_password, email))
-            conn.commit()
-            flash("Password reset successful!", "success")
-            return redirect(url_for('login'))
-        except Exception as e:
-            flash(f"Database error: {e}", "danger")
-        finally:
-            cur.close()
-            conn.close()
-
-    # If GET, just show the reset form
-    return render_template('reset.html')
-
 
 
 
