@@ -1708,43 +1708,38 @@ def forgot():
 
 
 
+from werkzeug.security import generate_password_hash
+
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     try:
-        # Validate the token (expires in 1 hour)
-        email = s.loads(token, salt='password-reset-salt', max_age=3600)
-    except Exception:
-        flash("Invalid or expired link.", "danger")
-        return redirect(url_for('forgot'))
-
-    if request.method == 'POST':
-        new_password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-
-        if not new_password or new_password != confirm_password:
-            flash("Passwords do not match.", "danger")
-            return render_template('reset.html', token=token)
-
-        # Hash the new password
-        hashed_password = generate_password_hash(new_password)
-
-        # Update the user's password in DB
-        conn = mysql_pool.get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_password, email))
-            conn.commit()
-            flash("Password updated successfully! You can now log in.", "success")
-        except Exception as e:
-            flash(f"Database error: {str(e)}", "danger")
-            return render_template('reset.html', token=token)
-        finally:
-            cur.close()
-            conn.close()
-
+        email = s.loads(token, salt='password-reset-salt', max_age=3600)  # get email from token
+    except:
+        flash("The reset link is invalid or has expired.", "danger")
         return redirect(url_for('login'))
 
-    return render_template('reset.html', token=token)
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if password != confirm_password:
+            flash("Passwords do not match.", "danger")
+            return redirect(request.url)
+
+        hashed_pw = generate_password_hash(password)
+
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_pw, email))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        flash("Your password has been reset. You can now login.", "success")
+        return redirect(url_for('login'))
+
+    return render_template('reset.html')
+
 
 
 
