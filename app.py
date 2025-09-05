@@ -781,7 +781,8 @@ def request_late_mess():
     end_time = time(20, 30)   # 20:30
 
     conn = mysql_pool.get_connection()
-    cur = conn.cursor(dictionary=True)
+    # ✅ Use buffered cursor so all results are consumed
+    cur = conn.cursor(dictionary=True, buffered=True)
 
     try:
         # ✅ Check if user is under mess cut (start, end, or in between)
@@ -789,7 +790,8 @@ def request_late_mess():
             SELECT * FROM mess_cut 
             WHERE user_id=%s AND %s BETWEEN start_date AND end_date
         """, (current_user.id, today))
-        mess_cut = cur.fetchone()
+        mess_cut = cur.fetchone()  # buffered=True ensures all results are consumed
+
         if mess_cut:
             flash("❌ You cannot request late mess because you are under a mess cut today.", "danger")
             can_request = False
