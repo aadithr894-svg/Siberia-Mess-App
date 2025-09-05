@@ -98,7 +98,11 @@ function onScanSuccess(decodedText) {
       resultDiv.className = "text-center text-green-600 font-semibold mb-4";
       liveCount.innerText = data.count;
     } else {
-      resultDiv.textContent = `❌ ${data.message}`;
+      if (data.name) {
+        resultDiv.textContent = `❌ ${data.message} (${data.name})`;
+      } else {
+        resultDiv.textContent = `❌ ${data.message}`;
+      }
       resultDiv.className = "text-center text-red-600 font-semibold mb-4";
     }
   })
