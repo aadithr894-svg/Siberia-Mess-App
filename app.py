@@ -24,7 +24,9 @@ dbconfig = {
     "password": os.environ.get("MYSQL_PASSWORD"),
     "database": os.environ.get("MYSQL_DB"),
     "port": int(os.environ.get("MYSQL_PORT", 3306))
+    
 }
+
 
 # --- Setup MySQL connection pool ---
 try:
@@ -909,66 +911,64 @@ def scan_qr():
     if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
         return jsonify({'success': False, 'message': 'Invalid data'}), 400
 
-    conn = mysql_pool.get_connection()          # Get connection from pool
-    cur = conn.cursor(dictionary=True)          # DictCursor
-
+    conn = mysql_pool.get_connection()  # Get connection from pool
     try:
-        # 🔹 Check if user has an active mess cut today
-        cur.execute("""
-            SELECT * FROM mess_cut
-            WHERE user_id=%s AND start_date <= %s AND end_date >= %s
-        """, (user_id, today, today))
-        if cur.fetchone():
-            return jsonify({'success': False, 'message': 'User has a mess cut today. Scan not allowed.'}), 403
+        with conn.cursor(dictionary=True, buffered=True) as cur:  # ✅ Safe buffered cursor
+            # 🔹 Check if user has an active mess cut today
+            cur.execute("""
+                SELECT * FROM mess_cut
+                WHERE user_id=%s AND start_date <= %s AND end_date >= %s
+            """, (user_id, today, today))
+            if cur.fetchone():
+                return jsonify({'success': False, 'message': 'User has a mess cut today. Scan not allowed.'}), 403
 
-        # Check duplicate scan
-        cur.execute("""
-            SELECT id FROM meal_attendance
-            WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
-        """, (user_id, meal_type, today))
-        if cur.fetchone():
-            return jsonify({'success': False, 'message': f'Already scanned for {meal_type} today'}), 400
+            # 🔹 Check duplicate scan
+            cur.execute("""
+                SELECT id FROM meal_attendance
+                WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
+            """, (user_id, meal_type, today))
+            if cur.fetchone():
+                return jsonify({'success': False, 'message': f'Already scanned for {meal_type} today'}), 400
 
-        # Insert attendance
-        cur.execute("""
-            INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
-            VALUES (%s, %s, %s)
-        """, (user_id, meal_type, today))
+            # 🔹 Insert attendance
+            cur.execute("""
+                INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
+                VALUES (%s, %s, %s)
+            """, (user_id, meal_type, today))
 
-        # Increment mess_count
-        cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id = %s", (user_id,))
-        conn.commit()
+            # 🔹 Increment mess_count
+            cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id = %s", (user_id,))
+            conn.commit()
 
-        # Increment temporary live counter
-        live_counts[meal_type] += 1  
+            # 🔹 Increment temporary live counter
+            live_counts[meal_type] += 1  
 
-        # Get updated count from DB
-        cur.execute("""
-            SELECT COUNT(*) AS count FROM meal_attendance
-            WHERE meal_type=%s AND attendance_date=%s
-        """, (meal_type, today))
-        result = cur.fetchone()
+            # 🔹 Get updated count from DB
+            cur.execute("""
+                SELECT COUNT(*) AS count FROM meal_attendance
+                WHERE meal_type=%s AND attendance_date=%s
+            """, (meal_type, today))
+            result = cur.fetchone()
 
-        cur.execute("SELECT name, course, mess_count FROM users WHERE id=%s", (user_id,))
-        user = cur.fetchone()
+            # 🔹 Get user info
+            cur.execute("SELECT name, course, mess_count FROM users WHERE id=%s", (user_id,))
+            user = cur.fetchone()
 
-        return jsonify({
-            'success': True,
-            'name': user['name'],
-            'course': user['course'],
-            'mess_count': user['mess_count'],
-            'count': result['count'],
-            'live_count': live_counts[meal_type]  # 🔹 return live count
-        })
+            return jsonify({
+                'success': True,
+                'name': user['name'],
+                'course': user['course'],
+                'mess_count': user['mess_count'],
+                'count': result['count'],
+                'live_count': live_counts[meal_type]  # ✅ return live count
+            })
 
-    except MySQLdb.Error as e:
+    except Exception as e:
         conn.rollback()
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
 
     finally:
-        cur.close()
-        conn.close()                            # Return connection to pool
-
+        conn.close()  # ✅ connection returned to pool
 
 # -------- ADMIN: VIEW CONFIRMED QR COUNTS --------
 from flask import render_template, jsonify, request, flash
