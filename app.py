@@ -913,14 +913,24 @@ def scan_qr():
 
     conn = mysql_pool.get_connection()  # Get connection from pool
     try:
-        with conn.cursor(dictionary=True, buffered=True) as cur:  # ✅ Safe buffered cursor
+        with conn.cursor(dictionary=True, buffered=True) as cur:  
+            # 🔹 Always fetch user name first
+            cur.execute("SELECT name FROM users WHERE id=%s", (user_id,))
+            user = cur.fetchone()
+            if not user:
+                return jsonify({'success': False, 'message': 'User not found'}), 404
+
             # 🔹 Check if user has an active mess cut today
             cur.execute("""
-                SELECT * FROM mess_cut
+                SELECT 1 FROM mess_cut
                 WHERE user_id=%s AND start_date <= %s AND end_date >= %s
             """, (user_id, today, today))
             if cur.fetchone():
-                return jsonify({'success': False, 'message': 'User has a mess cut today. Scan not allowed.'}), 403
+                return jsonify({
+                    'success': False,
+                    'message': 'User has a mess cut today. Scan not allowed.',
+                    'name': user['name']
+                }), 403
 
             # 🔹 Check duplicate scan
             cur.execute("""
@@ -928,7 +938,11 @@ def scan_qr():
                 WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
             """, (user_id, meal_type, today))
             if cur.fetchone():
-                return jsonify({'success': False, 'message': f'Already scanned for {meal_type} today'}), 400
+                return jsonify({
+                    'success': False,
+                    'message': f'Already scanned for {meal_type} today',
+                    'name': user['name']
+                }), 400
 
             # 🔹 Insert attendance
             cur.execute("""
@@ -950,17 +964,11 @@ def scan_qr():
             """, (meal_type, today))
             result = cur.fetchone()
 
-            # 🔹 Get user info
-            cur.execute("SELECT name, course, mess_count FROM users WHERE id=%s", (user_id,))
-            user = cur.fetchone()
-
             return jsonify({
                 'success': True,
                 'name': user['name'],
-                'course': user['course'],
-                'mess_count': user['mess_count'],
                 'count': result['count'],
-                'live_count': live_counts[meal_type]  # ✅ return live count
+                'live_count': live_counts[meal_type]
             })
 
     except Exception as e:
