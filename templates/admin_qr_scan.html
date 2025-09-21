@@ -61,7 +61,7 @@ function updateLiveCount() {
     .catch(()=>{ liveCount.innerText = "0"; });
 }
 updateLiveCount();
-setInterval(updateLiveCount, 240000); // 2 min
+setInterval(updateLiveCount,5400000 ); // 2 min
 
 // Handle QR scan success
 function onScanSuccess(decodedText) {

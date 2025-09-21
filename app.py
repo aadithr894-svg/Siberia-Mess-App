@@ -7,25 +7,58 @@ import base64
 from datetime import datetime, time
 from config import Config
 from mysql.connector import pooling
+from flask_mysqldb import MySQL
+
 
 # ---------------- Flask App ----------------
 app = Flask(__name__)
-app.config.from_object(Config)
 
+dbconfig = {
+    "host": "localhost",    # or "localhost"
+    "user": "root",         # your MySQL username
+    "password": "mysql123",         # your MySQL password
+    "database": "w_mess_app"  # your database name
+}
 # ---------------- MySQL Connection Pool ----------------
 # app.py (or wherever you configure your DB)
 import os
 from mysql.connector import pooling, Error
+from mysql.connector import pooling
 
-# --- Load DB config from environment variables ---
-dbconfig = {
-    "host": os.environ.get("MYSQL_HOST"),
-    "user": os.environ.get("MYSQL_USER"),
-    "password": os.environ.get("MYSQL_PASSWORD"),
-    "database": os.environ.get("MYSQL_DB"),
-    "port": int(os.environ.get("MYSQL_PORT", 3306))
-    
-}
+mysql_pool = pooling.MySQLConnectionPool(
+    pool_name="mypool",
+    pool_size=5,
+    pool_reset_session=True,
+    host="mydb.cfc0uui6evlw.eu-north-1.rds.amazonaws.com",  # ✅ RDS endpoint
+    database="mess_app",  # ✅ your database name
+    user="root",          # ✅ your RDS username
+    password="Admin321"   # ✅ your RDS password
+)
+app = Flask(__name__)
+app.config.from_object(Config)
+
+mysql = MySQL(app)
+# Connect directly
+def get_db_connection():
+    return mysql.connector.connect(
+        host='localhost',
+        user='root',
+        password='mysql123',
+        database='w_mess_app'
+    )
+# ---------------- LOGIN MANAGER ----------------
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# ---------------- USER CLASS ----------------
+class User(UserMixin):
+    def __init__(self, id, name, email, user_type):
+        self.id = id
+        self.name = name
+        self.email = email
+        self.user_type = user_type
+        self.is_admin = user_type == 'admin'
 
 
 # --- Setup MySQL connection pool ---
@@ -87,26 +120,26 @@ def create_admin():
     cur = conn.cursor(dictionary=True)            # DictCursor equivalent
 
     # Check if admin already exists
-    cur.execute("SELECT * FROM users WHERE email = %s", ("siberiamess4@gmail.com",))
+    cur.execute("SELECT * FROM users WHERE email = %s", ("hostelmess@gmail.com",))
     admin = cur.fetchone()
 
-    hashed_password = generate_password_hash("siberia@123")
+    hashed_password = generate_password_hash("hostel@123")
 
     if not admin:
         # Insert new admin
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, ("Admin", "siberiamess4@gmail.com", "0000000000", "N/A", hashed_password, "admin", 1))
+        """, ("Admin", "hostelmess@gmail.com", "0000000000", "N/A", hashed_password, "admin", 1))
         conn.commit()
-        print("✅ Default admin created: siberiamess4@gmail.com, password=siberia@123")
+        print("✅ Default admin created: hostelmess@gmail.com, password=hostel@123")
     else:
         # Make sure admin is approved and user_type is admin
         cur.execute("""
             UPDATE users
             SET user_type=%s, approved=%s, password=%s
             WHERE email=%s
-        """, ("admin", 1, hashed_password, "siberiamess4@gmail.com"))
+        """, ("admin", 1, hashed_password, "hostelmess@gmail.com"))
         conn.commit()
         print("ℹ️ Admin already exists. Reset password and ensured approved=1.")
 
@@ -252,7 +285,7 @@ def reset_admin():
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, ("Admin", "siberiamess4@gmail.com", "0000000000", "N/A",
+        """, ("Admin", "hostelmess@gmail.com", "0000000000", "N/A",
               hashed_password, "admin", 1))
         conn.commit()
     except Exception as e:
@@ -261,7 +294,7 @@ def reset_admin():
         cur.close()
         conn.close()                              # Return connection to pool
 
-    return "✅ Admin reset: siberiamess4@gmail.com, password=siberia@123"
+    return "✅ Admin reset: hostelmess@gmail.com, password=hostel@123"
 
 
 #Approval
@@ -916,13 +949,13 @@ def scan_qr():
     conn = mysql_pool.get_connection()  # Get connection from pool
     try:
         with conn.cursor(dictionary=True, buffered=True) as cur:  
-            # 🔹 Always fetch user name first
+            # 🔹 Fetch user name
             cur.execute("SELECT name FROM users WHERE id=%s", (user_id,))
             user = cur.fetchone()
             if not user:
                 return jsonify({'success': False, 'message': 'User not found'}), 404
 
-            # 🔹 Check if user has an active mess cut today
+            # 🔹 Check mess cut
             cur.execute("""
                 SELECT 1 FROM mess_cut
                 WHERE user_id=%s AND start_date <= %s AND end_date >= %s
@@ -931,6 +964,19 @@ def scan_qr():
                 return jsonify({
                     'success': False,
                     'message': 'User has a mess cut today. Scan not allowed.',
+                    'name': user['name']
+                }), 403
+
+            # 🔹 Check mess skip in mess_skips table
+            cur.execute(f"""
+                SELECT {meal_type} FROM mess_skips
+                WHERE user_id=%s AND skip_date=%s
+            """, (user_id, today))
+            skip = cur.fetchone()
+            if skip and skip[meal_type] == 1:
+                return jsonify({
+                    'success': False,
+                    'message': f'User has skipped {meal_type} today.',
                     'name': user['name']
                 }), 403
 
@@ -978,7 +1024,8 @@ def scan_qr():
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
 
     finally:
-        conn.close()  # ✅ connection returned to pool
+        conn.close()
+
 
 # -------- ADMIN: VIEW CONFIRMED QR COUNTS --------
 from flask import render_template, jsonify, request, flash
@@ -1521,7 +1568,95 @@ def reset_late_mess():
             conn.close()
         return f"❌ Error resetting late mess: {str(e)}", 500
 
+from flask import request, flash, redirect, url_for, render_template
+from flask_login import login_required, current_user
+from datetime import datetime
+from mysql.connector import Error
 
+@app.route('/user/mess_skip', methods=['GET', 'POST'])
+@login_required
+def mess_skip():
+    if request.method == 'POST':
+        skip_date = request.form.get('skip_date')
+        meals = [meal for meal in ['breakfast', 'lunch', 'dinner'] if meal in request.form]
+
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor()
+
+        try:
+            for meal in meals:
+                cur.execute("""
+                    INSERT INTO mess_skips (user_id, skip_date, meal_type)
+                    VALUES (%s, %s, %s)
+                    ON DUPLICATE KEY UPDATE user_id=user_id
+                """, (current_user.id, skip_date, meal))
+            conn.commit()
+            flash("✅ Mess skip updated successfully!", "success")
+        except Exception as e:
+            conn.rollback()
+            flash(f"Error: {str(e)}", "danger")
+        finally:
+            cur.close()
+            conn.close()
+
+        return redirect(url_for('mess_skip'))
+
+    return render_template('user_mess_skip.html')
+
+
+
+
+@app.route('/admin/mess_skips')
+@login_required
+def admin_mess_skips():
+    if not getattr(current_user, 'is_admin', False):
+        flash("Unauthorized access!", "danger")
+        return redirect(url_for('index'))
+
+    tomorrow = date.today() + timedelta(days=1)
+    skips = {'breakfast': [], 'lunch': [], 'dinner': []}
+    skip_counts = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
+
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # 🔹 Explicitly print what we're querying
+        print(f"Fetching mess skips for date: {tomorrow}")
+
+        cur.execute("""
+            SELECT s.meal_type, u.name
+            FROM mess_skips s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.skip_date = %s
+        """, (tomorrow,))
+        rows = cur.fetchall()
+
+        if not rows:
+            print("No skips found for tomorrow!")
+
+        for row in rows:
+            meal = row['meal_type']
+            name = row['name']
+            if meal in skips:
+                skips[meal].append(name)
+                skip_counts[meal] += 1
+            else:
+                print(f"Unexpected meal_type in DB: {meal}")
+
+    except Exception as e:
+        flash(f"Error fetching mess skips: {e}", "danger")
+        print(f"DB Error: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+    print(f"Skip counts: {skip_counts}")
+    print(f"Skips data: {skips}")
+
+    return render_template("admin_mess_skips.html",
+                           skips=skips,
+                           skip_counts=skip_counts,
+                           tomorrow=tomorrow)
 
 from flask import jsonify, request, render_template
 import MySQLdb.cursors
@@ -1758,6 +1893,5 @@ def reset_password(token):
 # ----------------- START APP -----------------
 if __name__ == '__main__':
     app.run(debug=True)
-
 
 
