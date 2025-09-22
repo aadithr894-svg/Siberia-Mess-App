@@ -1426,6 +1426,302 @@ def add_mess_cut_admin():
     return render_template('admin_add_mess_cut.html', users=users)
 
 
+from datetime import date, datetime, timedelta
+import calendar
+from flask import request, flash, redirect, url_for, render_template
+from flask_login import login_required, current_user
+
+from datetime import date, datetime, timedelta
+import calendar
+from flask import request, flash, redirect, url_for, render_template
+from flask_login import login_required, current_user
+
+@app.route('/admin/generate_bills', methods=['GET', 'POST'])
+@login_required
+def generate_bills():
+    if not getattr(current_user, 'is_admin', False):
+        flash("Unauthorized", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    bills_generated = []
+    conn = None
+    cur = None
+
+    if request.method == 'POST':
+        try:
+            daily_amount = float(request.form.get('daily_amount', 0))
+            establishment_fee = float(request.form.get('establishment_fee', 0))
+            bill_month = request.form.get('bill_month')  # format: 'YYYY-MM'
+
+            if not daily_amount or not bill_month:
+                flash("Please provide all required fields", "warning")
+                return redirect(url_for('generate_bills'))
+
+            # Compute first and last day of the month
+            year, month = map(int, bill_month.split('-'))
+            start_date_obj = date(year, month, 1)
+            end_date_obj = date(year, month, calendar.monthrange(year, month)[1])
+
+            # Parse mess closed dates (optional)
+            closed_dates_str = request.form.get('mess_closed_dates', '')
+            closed_dates = set()
+            if closed_dates_str:
+                closed_dates = set(datetime.strptime(d.strip(), "%d-%m-%Y").date() for d in closed_dates_str.split(','))
+
+            # Active days in month minus closed dates
+            active_days = (end_date_obj - start_date_obj).days + 1
+            active_days -= sum(1 for d in closed_dates if start_date_obj <= d <= end_date_obj)
+
+            # DB connection
+            conn = mysql_pool.get_connection()
+            cur = conn.cursor(dictionary=True)
+
+            # Fetch all users
+            cur.execute("SELECT id, name FROM users")
+            users = cur.fetchall()
+
+            for user in users:
+                # Skip bills already generated for this month
+                cur.execute("""
+                    SELECT id FROM bills
+                    WHERE user_id=%s AND bill_date BETWEEN %s AND %s
+                """, (user['id'], start_date_obj, end_date_obj))
+                if cur.fetchone():
+                    continue
+
+                # Fetch mess cuts overlapping with the month
+                cur.execute("""
+                    SELECT start_date, end_date
+                    FROM mess_cut
+                    WHERE user_id=%s
+                      AND start_date <= %s
+                      AND end_date >= %s
+                """, (user['id'], end_date_obj, start_date_obj))
+                cuts = cur.fetchall()
+
+                mess_cut_days = 0
+                for cut in cuts:
+                    cut_start = max(cut['start_date'], start_date_obj)
+                    cut_end = min(cut['end_date'], end_date_obj)
+
+                    # Generate all dates in this mess cut
+                    cut_dates = set(cut_start + timedelta(days=i) for i in range((cut_end - cut_start).days + 1))
+                    # Only consider dates which are NOT closed
+                    active_cut_dates = cut_dates - closed_dates
+
+                    # Apply only if >=3 active days
+                    if len(active_cut_dates) >= 3:
+                        mess_cut_days += len(active_cut_dates)
+
+                # Calculate reduction
+                reduction_amount = round(0.67 * daily_amount * mess_cut_days, 2)
+
+                # 🔹 Fetch fines for this user in billing month (scan fines included)
+                cur.execute("""
+                    SELECT SUM(fine_amount) AS total_fines
+                    FROM fines
+                    WHERE user_id=%s AND fine_date BETWEEN %s AND %s
+                """, (user['id'], start_date_obj, end_date_obj))
+                fine_row = cur.fetchone()
+                total_fines = fine_row['total_fines'] or 0.0
+
+                # Total amount including establishment fee and fines
+                total_amount = round(daily_amount * active_days - reduction_amount + establishment_fee + total_fines, 2)
+
+                # Insert bill into DB
+                cur.execute("""
+                    INSERT INTO bills
+                    (user_id, bill_date, daily_amount, active_days, mess_cut_days, reduction_amount, establishment_fee, total_fines, total_amount)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    user['id'], date.today(), daily_amount, active_days,
+                    mess_cut_days, reduction_amount, establishment_fee, total_fines, total_amount
+                ))
+
+                # Prepare for frontend display
+                bills_generated.append({
+                    'user': user['name'],
+                    'mess_cut_days': mess_cut_days,
+                    'closed_dates': sorted([d.strftime("%d-%m-%Y") for d in closed_dates if start_date_obj <= d <= end_date_obj]),
+                    'establishment_fee': establishment_fee,
+                    'total_fines': total_fines,
+                    'total_amount': total_amount,
+                    'bill_month': bill_month
+                })
+
+            conn.commit()
+            flash(f"✅ Bills generated successfully for {len(bills_generated)} users!", "success")
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            flash(f"Error generating bills: {str(e)}", "danger")
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    return render_template('admin_generate_bills.html', bills_generated=bills_generated)
+
+
+from datetime import datetime, time
+
+MESS_WINDOWS = {
+    'breakfast': (time(7,30), time(9,30)),
+    'lunch': (time(12,0), time(14,0)),
+    'dinner': (time(19,0), time(21,0)),
+}
+
+
+
+
+from flask import jsonify, request, render_template
+from flask_login import login_required, current_user
+from datetime import date
+
+@app.route('/admin/non_scanned/<meal_type>')
+@login_required
+def non_scanned_users(meal_type):
+    if not current_user.is_admin:
+        flash("Unauthorized", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    if meal_type not in ['breakfast','lunch','dinner']:
+        flash("Invalid meal type", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    today = date.today()
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # Users who didn't scan for this meal today
+        cur.execute("""
+            SELECT id, name FROM users
+            WHERE id NOT IN (
+                SELECT user_id FROM meal_attendance
+                WHERE meal_type=%s AND attendance_date=%s
+            )
+        """, (meal_type, today))
+        users = cur.fetchall()
+
+        # Users who already got fine
+        cur.execute("""
+            SELECT user_id FROM fines
+            WHERE fine_date=%s AND meal_type=%s
+        """, (today, meal_type))
+        fined = {row['user_id'] for row in cur.fetchall()}
+
+        return render_template('admin_add_fine.html', users=users, fined=fined, meal_type=meal_type, today=today)
+    finally:
+        cur.close()
+        conn.close()
+
+
+        
+def get_current_meal():
+    now = datetime.now()
+    hours = now.hour + now.minute / 60
+    if 7.5 <= hours <= 9:
+        return 'breakfast'
+    elif 12 <= hours <= 14:
+        return 'lunch'
+    else:
+        return 'dinner'
+
+
+
+    
+from flask import render_template, request, flash, redirect, url_for
+from flask_login import login_required, current_user
+from datetime import date
+
+@app.route('/admin/add_fine', methods=['GET', 'POST'])
+@login_required
+def add_fine():
+    if not getattr(current_user, 'is_admin', False):
+        flash("Unauthorized", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    today = date.today()
+    non_scanned_users = []
+
+    try:
+        # Fetch users who have not scanned today for any meal
+        cur.execute("""
+            SELECT u.id, u.name
+            FROM users u
+            WHERE u.is_active = 1
+            AND u.id NOT IN (
+                SELECT user_id FROM meal_attendance WHERE attendance_date = %s
+            )
+        """, (today,))
+        non_scanned_users = cur.fetchall()
+
+        if request.method == 'POST':
+            fines = request.form.getlist('fine')      # list of fine amounts
+            user_ids = request.form.getlist('user_id') # list of user ids
+
+            for uid, fine_amount in zip(user_ids, fines):
+                fine_amount = float(fine_amount) if fine_amount else 0
+                if fine_amount > 0:
+                    # Insert into fines table
+                    cur.execute("""
+                        INSERT INTO fines (user_id, fine_date, amount)
+                        VALUES (%s, %s, %s)
+                        ON DUPLICATE KEY UPDATE amount=%s
+                    """, (uid, today, fine_amount, fine_amount))
+            conn.commit()
+            flash(f"✅ Fines added for {len(user_ids)} students!", "success")
+            return redirect(url_for('add_fine'))
+
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error: {str(e)}", "danger")
+    finally:
+        cur.close()
+        conn.close()
+
+    return render_template('admin_add_fine.html', non_scanned_users=non_scanned_users, today=today)
+
+
+
+@app.route('/user/bills')
+@login_required
+def user_bills():
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    bills = []
+    try:
+        cur.execute("""
+            SELECT bill_date, daily_amount, active_days, mess_cut_days,
+                   reduction_amount, establishment_fee, total_fines, total_amount
+            FROM bills
+            WHERE user_id=%s
+            ORDER BY bill_date DESC
+        """, (current_user.id,))
+        bills = cur.fetchall()
+
+        # Convert bill_date to date object if it's a string
+        for bill in bills:
+            if isinstance(bill['bill_date'], str):
+                bill['bill_date'] = datetime.strptime(bill['bill_date'], "%Y-%m-%d").date()
+
+    except Exception as e:
+        flash(f"Error fetching bills: {str(e)}", "danger")
+
+    finally:
+        cur.close()
+        conn.close()
+
+    return render_template('user_bills.html', bills=bills)
+
+
 
 
 # ---------------- ADMIN: Get all users' mess count ----------------
