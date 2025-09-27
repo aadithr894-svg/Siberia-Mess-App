@@ -16,6 +16,18 @@ app.config.from_object(Config)
 # app.py (or wherever you configure your DB)
 import os
 from mysql.connector import pooling, Error
+from mysql.connector import pooling
+
+mysql_pool = pooling.MySQLConnectionPool(
+    pool_name="mypool",
+    pool_size=5,
+    pool_reset_session=True,
+    host="mydb.cfc0uui6evlw.eu-north-1.rds.amazonaws.com",  # ✅ RDS endpoint
+    database="mess_app",  # ✅ your database name
+    user="root",          # ✅ your RDS username
+    password="Admin321"   # ✅ your RDS password
+)
+
 
 # --- Load DB config from environment variables ---
 dbconfig = {
@@ -1758,6 +1770,5 @@ def reset_password(token):
 # ----------------- START APP -----------------
 if __name__ == '__main__':
     app.run(debug=True)
-
 
 
