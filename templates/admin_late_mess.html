@@ -1,60 +1,73 @@
 {% extends "admin_base.html" %}
-
 {% block content %}
-<div class="container mt-4">
-    <h2>Late Mess Requests</h2>
 
-    {% if late_mess_requests %}
-    <table class="table table-bordered mt-3">
-        <thead class="thead-light">
-            <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Food Type</th>
-                <th>Date Requested</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for req in late_mess_requests %}
-            <tr id="row-{{ req.id }}">
-                <td>{{ req.name }}</td>
-                <td>{{ req.email }}</td>
-                <td>{{ req.food_type or 'N/A' }}</td>
-                <td>{{ req.date_requested }}</td>
-                <td>{{ req.reason or 'N/A' }}</td>
-                <td id="status-{{ req.id }}">
-                    {% if req.status == 'approved' %}
-                        <span class="badge bg-success">Approved</span>
-                    {% else %}
-                        <span class="badge bg-warning">Pending</span>
-                    {% endif %}
-                </td>
-                <td id="action-{{ req.id }}">
-                    {% if req.status != 'approved' %}
-                        <button class="btn btn-success btn-sm" onclick="approveLate({{ req.id }})">Approve</button>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div class="alert alert-info mt-3">
-        No late mess requests found.
+<div class="container my-4">
+
+  <!-- Outer card “box” -->
+  <div class="card shadow-lg border-0">
+    <div class="card-header bg-primary text-white">
+      <h4 class="mb-0">Late Mess Requests</h4>
     </div>
-    {% endif %}
-</div>
+
+    <div class="card-body">
+
+      {% if late_mess_requests %}
+        <div class="row g-4">
+          {% for req in late_mess_requests %}
+          <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm border-0 h-100" id="row-{{ req.id }}">
+              <div class="card-header d-flex justify-content-between align-items-center bg-primary-subtle">
+                <!-- Serial number on the left -->
+                <span class="badge bg-secondary me-2">#{{ loop.index }}</span>
+                <h5 class="mb-0 flex-grow-1">{{ req.name }}</h5>
+                <span id="status-{{ req.id }}">
+                  {% if req.status == 'approved' %}
+                    <span class="badge bg-success">Approved</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark">Pending</span>
+                  {% endif %}
+                </span>
+              </div>
+
+              <div class="card-body">
+                <ul class="list-unstyled small mb-0">
+                  <li><strong>Email:</strong> {{ req.email }}</li>
+                  <li><strong>Food Type:</strong> {{ req.food_type or 'N/A' }}</li>
+                  <li><strong>Date Requested:</strong> {{ req.date_requested }}</li>
+                  <li><strong>Reason:</strong> {{ req.reason or 'N/A' }}</li>
+                </ul>
+              </div>
+
+              <div class="card-footer bg-transparent text-end" id="action-{{ req.id }}">
+                {% if req.status != 'approved' %}
+                  <button class="btn btn-success btn-sm"
+                          onclick="approveLate({{ req.id }})">
+                    ✅ Approve
+                  </button>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="alert alert-info mt-3">
+          No late mess requests found.
+        </div>
+      {% endif %}
+
+    </div> <!-- /card-body -->
+  </div>   <!-- /outer card -->
+
+</div> <!-- /container -->
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 function approveLate(id) {
     $.post("/admin/approve_late/" + id)
-    .done(function(data) {
+    .done(function() {
         $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
-        $("#action-" + id).html('');
+        $("#action-" + id).empty();
     })
     .fail(function() {
         alert("❌ Error approving late mess!");
