@@ -21,7 +21,6 @@
                    data-bs-toggle="collapse"
                    data-bs-target="#body-{{ req.id }}"
                    style="cursor:pointer;">
-                <span class="badge bg-secondary me-2">#{{ loop.index }}</span>
                 <h5 class="mb-0 flex-grow-1">{{ req.name }}</h5>
                 <span id="status-{{ req.id }}">
                   {% if req.status == 'approved' %}
@@ -37,6 +36,7 @@
                 <div class="card-body">
                   <ul class="list-unstyled small mb-0">
                     <li><strong>Email:</strong> {{ req.email }}</li>
+                    <li><strong>Course:</strong> {{ req.course or 'N/A' }}</li>
                     <li><strong>Food Type:</strong> {{ req.food_type or 'N/A' }}</li>
                     <li><strong>Date Requested:</strong> {{ req.date_requested }}</li>
                   </ul>
