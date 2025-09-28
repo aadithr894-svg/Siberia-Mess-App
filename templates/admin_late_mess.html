@@ -3,7 +3,7 @@
 
 <div class="container my-4">
 
-  <!-- Outer card “box” -->
+  <!-- Outer wrapper card -->
   <div class="card shadow-lg border-0">
     <div class="card-header bg-primary text-white">
       <h4 class="mb-0">Late Mess Requests</h4>
@@ -15,9 +15,12 @@
         <div class="row g-4">
           {% for req in late_mess_requests %}
           <div class="col-md-6 col-lg-4">
-            <div class="card shadow-sm border-0 h-100" id="row-{{ req.id }}">
-              <div class="card-header d-flex justify-content-between align-items-center bg-primary-subtle">
-                <!-- Serial number on the left -->
+            <div class="card request-card h-100" id="row-{{ req.id }}">
+              <!-- Collapsible header -->
+              <div class="card-header d-flex justify-content-between align-items-center bg-primary-subtle toggle-body"
+                   data-bs-toggle="collapse"
+                   data-bs-target="#body-{{ req.id }}"
+                   style="cursor:pointer;">
                 <span class="badge bg-secondary me-2">#{{ loop.index }}</span>
                 <h5 class="mb-0 flex-grow-1">{{ req.name }}</h5>
                 <span id="status-{{ req.id }}">
@@ -29,22 +32,24 @@
                 </span>
               </div>
 
-              <div class="card-body">
-                <ul class="list-unstyled small mb-0">
-                  <li><strong>Email:</strong> {{ req.email }}</li>
-                  <li><strong>Food Type:</strong> {{ req.food_type or 'N/A' }}</li>
-                  <li><strong>Date Requested:</strong> {{ req.date_requested }}</li>
-                  {# Reason field removed #}
-                </ul>
-              </div>
+              <!-- Collapsible body -->
+              <div id="body-{{ req.id }}" class="collapse show">
+                <div class="card-body">
+                  <ul class="list-unstyled small mb-0">
+                    <li><strong>Email:</strong> {{ req.email }}</li>
+                    <li><strong>Food Type:</strong> {{ req.food_type or 'N/A' }}</li>
+                    <li><strong>Date Requested:</strong> {{ req.date_requested }}</li>
+                  </ul>
+                </div>
 
-              <div class="card-footer bg-transparent text-end" id="action-{{ req.id }}">
-                {% if req.status != 'approved' %}
-                  <button class="btn btn-success btn-sm"
-                          onclick="approveLate({{ req.id }})">
-                    ✅ Approve
-                  </button>
-                {% endif %}
+                <div class="card-footer bg-transparent text-end" id="action-{{ req.id }}">
+                  {% if req.status != 'approved' %}
+                    <button class="btn btn-success btn-sm"
+                            onclick="approveLate({{ req.id }})">
+                      ✅ Approve
+                    </button>
+                  {% endif %}
+                </div>
               </div>
             </div>
           </div>
@@ -56,22 +61,36 @@
         </div>
       {% endif %}
 
-    </div> <!-- /card-body -->
-  </div>   <!-- /outer card -->
+    </div>
+  </div>
+</div>
 
-</div> <!-- /container -->
-
+<!-- jQuery + Bootstrap JS (for collapse animation) -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
 function approveLate(id) {
     $.post("/admin/approve_late/" + id)
-    .done(function() {
-        $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
-        $("#action-" + id).empty();
-    })
-    .fail(function() {
-        alert("❌ Error approving late mess!");
-    });
+      .done(function() {
+          $("#status-" + id).html('<span class="badge bg-success">Approved</span>');
+          $("#action-" + id).empty();
+      })
+      .fail(function() {
+          alert("❌ Error approving late mess!");
+      });
 }
 </script>
+
+<style>
+/* Subtle hover & lift effect for each card */
+.request-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.request-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+}
+</style>
+
 {% endblock %}
