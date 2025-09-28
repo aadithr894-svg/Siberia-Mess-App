@@ -1,54 +1,65 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container mt-4">
-    <h2 class="mb-4">🚀 Pending User Approvals</h2>
+<div class="container py-3">
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+  <h2 class="mb-4 text-center text-md-start">🚀 Pending User Approvals</h2>
 
-    {% if users %}
-        <table class="table table-bordered table-striped">
-            <thead class="table-dark">
-                <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Phone</th>
-                    <th>Course</th>
-                    <th>User Type</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for user in users %}
-                <tr>
-                    <td>{{ user.id }}</td>
-                    <td>{{ user.name }}</td>
-                    <td>{{ user.email }}</td>
-                    <td>{{ user.phone }}</td>
-                    <td>{{ user.course }}</td>
-                    <td>{{ user.user_type }}</td>
-                    <td>
-                        <a href="{{ url_for('approve_user', user_id=user.id) }}" 
-                           class="btn btn-success btn-sm">
-                            ✅ Approve
-                        </a>
-                        <a href="{{ url_for('reject_user', user_id=user.id) }}" 
-                           class="btn btn-danger btn-sm">
-                            ❌ Reject
-                        </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <div class="alert alert-info">🎉 No pending users for approval.</div>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
     {% endif %}
+  {% endwith %}
+
+  {% if users %}
+    <div class="row g-3">
+      {% for user in users %}
+      <div class="col-12">
+        <div class="card shadow-sm border-0 rounded-4">
+
+          <!-- Top row: Name + Approve/Reject buttons -->
+          <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div  class="fw-semibold"
+                  style="cursor:pointer;"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#details{{ loop.index }}"
+                  aria-expanded="false"
+                  aria-controls="details{{ loop.index }}">
+              #{{ loop.index }} &nbsp; {{ user.name }}
+            </div>
+            <div class="ms-auto">
+              <a href="{{ url_for('approve_user', user_id=user.id) }}"
+                 class="btn btn-success btn-sm me-2">✅ Approve</a>
+              <a href="{{ url_for('reject_user', user_id=user.id) }}"
+                 class="btn btn-danger btn-sm">❌ Reject</a>
+            </div>
+          </div>
+
+          <!-- Collapsible details -->
+          <div id="details{{ loop.index }}" class="collapse">
+            <div class="card-body">
+              <ul class="list-unstyled mb-0 small">
+                <li><strong>Email:</strong> <span class="text-break">{{ user.email }}</span></li>
+                <li><strong>Phone:</strong> {{ user.phone }}</li>
+                <li><strong>Course:</strong> {{ user.course }}</li>
+                <li><strong>User Type:</strong> {{ user.user_type|capitalize }}</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="alert alert-info text-center mt-4">
+      🎉 No pending users for approval.
+    </div>
+  {% endif %}
+
 </div>
 {% endblock %}
