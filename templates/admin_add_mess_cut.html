@@ -111,39 +111,27 @@ const today = new Date().toISOString().split("T")[0];
 document.getElementById("startDate").setAttribute("min", today);
 document.getElementById("endDate").setAttribute("min", today);
 
-// ✅ Auto enforce minimum 3 days gap
+// ✅ Keep end date >= start date
 document.getElementById("startDate").addEventListener("change", function() {
     const start = new Date(this.value);
     if (isNaN(start)) return;
-    const minEnd = new Date(start);
-    minEnd.setDate(start.getDate() +2);
-    const minEndStr = minEnd.toISOString().split("T")[0];
-    document.getElementById("endDate").setAttribute("min", minEndStr);
-
-    if (document.getElementById("endDate").value && 
-        new Date(document.getElementById("endDate").value) < minEnd) {
-        document.getElementById("endDate").value = "";
-    }
+    // end date must be same or after start
+    document.getElementById("endDate").setAttribute(
+        "min",
+        this.value
+    );
 });
-
-// ✅ Helper: format YYYY-MM-DD → DD-MM-YYYY
-function formatDate(dateStr) {
-    const parts = dateStr.split("-");
-    return `${parts[2]}-${parts[1]}-${parts[0]}`;
-}
 
 // ✅ Validate + Confirm before submit
 document.getElementById("messCutForm").addEventListener("submit", function(e) {
     const startInput = document.getElementById("startDate").value;
     const endInput = document.getElementById("endDate").value;
-
     const start = new Date(startInput);
     const end = new Date(endInput);
-    const diff = (end - start) / (1000 * 60 * 60 * 24);
 
-    if (diff < 3) {
+    if (end < start) {
         e.preventDefault();
-        alert("❌ End date must be at least 3 days after start date!");
+        alert("❌ End date cannot be before start date!");
         return;
     }
 
@@ -153,10 +141,9 @@ document.getElementById("messCutForm").addEventListener("submit", function(e) {
         alert("❌ Please select a user.");
         return;
     }
-    const userLabel = document.querySelector("label[for='" + selectedUser.id + "']").innerText;
 
-    const confirmMsg = `✅ Please confirm:\n\n👤 User: ${userLabel}\n📅 Start: ${formatDate(startInput)}\n📅 End: ${formatDate(endInput)}\n\nDo you want to submit?`;
-    
+    const userLabel = document.querySelector("label[for='" + selectedUser.id + "']").innerText;
+    const confirmMsg = `✅ Please confirm:\n\n👤 User: ${userLabel}\n📅 Start: ${startInput}\n📅 End: ${endInput}\n\nDo you want to submit?`;
     if (!confirm(confirmMsg)) {
         e.preventDefault();
     }
