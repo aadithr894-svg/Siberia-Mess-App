@@ -1604,30 +1604,42 @@ def late_mess_list():
         flash("Unauthorized access!", "danger")
         return redirect(url_for('admin_dashboard'))
 
+    conn = None
+    cur = None
     try:
         conn = mysql_pool.get_connection()
         cur = conn.cursor(dictionary=True)
 
+        # ✅ Added u.course so it's available as req.course in the template
         cur.execute("""
-            SELECT lm.id, u.name, u.email, u.food_type, lm.date_requested, lm.reason, lm.status
-            FROM late_mess lm
-            JOIN users u ON u.id = lm.user_id
+            SELECT lm.id,
+                   u.name,
+                   u.email,
+                   u.course,
+                   u.food_type,
+                   lm.date_requested,
+                   lm.reason,
+                   lm.status
+            FROM late_mess AS lm
+            JOIN users AS u ON u.id = lm.user_id
             ORDER BY lm.date_requested DESC
         """)
         late_mess_requests = cur.fetchall()
 
-        cur.close()
-        conn.close()
-
-        return render_template('admin_late_mess.html', late_mess_requests=late_mess_requests)
+        return render_template(
+            'admin_late_mess.html',
+            late_mess_requests=late_mess_requests
+        )
 
     except Exception as e:
+        flash(f"Database error: {e}", "danger")
+        return redirect(url_for('admin_dashboard'))
+    finally:
+        # ✅ Ensure resources are closed even if an error occurs
         if cur:
             cur.close()
         if conn:
             conn.close()
-        flash(f"Database error: {e}", "danger")
-        return redirect(url_for('admin_dashboard'))
 
 
 
