@@ -925,16 +925,16 @@ def scan_qr():
     if not user_id or meal_type not in ['breakfast', 'lunch', 'dinner']:
         return jsonify({'success': False, 'message': 'Invalid data'}), 400
 
-    conn = mysql_pool.get_connection()  # Get connection from pool
+    conn = mysql_pool.get_connection()
     try:
-        with conn.cursor(dictionary=True, buffered=True) as cur:  
-            # 🔹 Always fetch user name first
+        with conn.cursor(dictionary=True, buffered=True) as cur:
+            # 1️⃣ Validate user
             cur.execute("SELECT name FROM users WHERE id=%s", (user_id,))
             user = cur.fetchone()
             if not user:
                 return jsonify({'success': False, 'message': 'User not found'}), 404
 
-            # 🔹 Check if user has an active mess cut today
+            # 2️⃣ Check mess cut
             cur.execute("""
                 SELECT 1 FROM mess_cut
                 WHERE user_id=%s AND start_date <= %s AND end_date >= %s
@@ -946,9 +946,9 @@ def scan_qr():
                     'name': user['name']
                 }), 403
 
-            # 🔹 Check duplicate scan
+            # 3️⃣ Prevent duplicate
             cur.execute("""
-                SELECT id FROM meal_attendance
+                SELECT 1 FROM meal_attendance
                 WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
             """, (user_id, meal_type, today))
             if cur.fetchone():
@@ -958,39 +958,38 @@ def scan_qr():
                     'name': user['name']
                 }), 400
 
-            # 🔹 Insert attendance
+            # 4️⃣ Insert attendance & increment user’s mess_count atomically
             cur.execute("""
                 INSERT INTO meal_attendance (user_id, meal_type, attendance_date)
                 VALUES (%s, %s, %s)
             """, (user_id, meal_type, today))
-
-            # 🔹 Increment mess_count
-            cur.execute("UPDATE users SET mess_count = mess_count + 1 WHERE id = %s", (user_id,))
+            cur.execute("""
+                UPDATE users SET mess_count = mess_count + 1 WHERE id = %s
+            """, (user_id,))
             conn.commit()
 
-            # 🔹 Increment temporary live counter
-            live_counts[meal_type] += 1  
-
-            # 🔹 Get updated count from DB
+            # 5️⃣ Always read the current total from DB
             cur.execute("""
-                SELECT COUNT(*) AS count FROM meal_attendance
+                SELECT COUNT(*) AS count
+                FROM meal_attendance
                 WHERE meal_type=%s AND attendance_date=%s
             """, (meal_type, today))
-            result = cur.fetchone()
+            db_count = cur.fetchone()['count']
 
             return jsonify({
                 'success': True,
                 'name': user['name'],
-                'count': result['count'],
-                'live_count': live_counts[meal_type]
+                'count': db_count     # <- single source of truth
             })
 
     except Exception as e:
         conn.rollback()
-        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
-
+        return jsonify({'success': False, 'message': f'Database error: {e}'}), 500
     finally:
-        conn.close()  # ✅ connection returned to pool
+        conn.close()
+
+
+
 
 # -------- ADMIN: VIEW CONFIRMED QR COUNTS --------
 from flask import render_template, jsonify, request, flash
@@ -1001,36 +1000,47 @@ import MySQLdb
 live_counts = {"breakfast": 0, "lunch": 0, "dinner": 0}
 
 # ---------------- ADMIN: VIEW QR SCAN COUNTS ----------------
+from datetime import datetime, date
+from calendar import month_name
+from flask import request, render_template, flash
+from flask_login import login_required
+
 @app.route('/admin/qr_scan_counts')
 @login_required
 def qr_scan_counts():
+    # optional month filter, e.g. ?month=2025-10
+    selected_month = request.args.get("month", "")
+
     counts_by_date = {}
     conn = mysql_pool.get_connection()
     cur = conn.cursor()
 
     try:
-        cur.execute("""
+        base_sql = """
             SELECT meal_date, meal_type, total_count
             FROM daily_meal_attendance
-            ORDER BY meal_date ASC   -- calendar order
-        """)
+        """
+        params = []
+
+        # Apply month filter if provided
+        if selected_month:
+            base_sql += " WHERE DATE_FORMAT(meal_date,'%%Y-%%m') = %s"
+            params.append(selected_month)
+
+        base_sql += " ORDER BY meal_date ASC"
+        cur.execute(base_sql, params)
         rows = cur.fetchall()
 
-        for row in rows:
-            date_obj = row[0]          # might be date/datetime OR string
-            meal = row[1]
-            count = row[2]
+        for meal_date, meal_type, total_count in rows:
+            # normalise to a date object
+            if isinstance(meal_date, str):
+                meal_date = datetime.strptime(meal_date, "%Y-%m-%d").date()
+            elif isinstance(meal_date, datetime):
+                meal_date = meal_date.date()
 
-            # Ensure we always have a date object
-            from datetime import datetime, date
-            if isinstance(date_obj, str):
-                date_obj = datetime.strptime(date_obj, "%Y-%m-%d").date()
-            elif isinstance(date_obj, datetime):
-                date_obj = date_obj.date()  # strip time if needed
-
-            if date_obj not in counts_by_date:
-                counts_by_date[date_obj] = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
-            counts_by_date[date_obj][meal] = count
+            counts_by_date.setdefault(
+                meal_date, {'breakfast': 0, 'lunch': 0, 'dinner': 0}
+            )[meal_type] = total_count
 
     except Exception as e:
         flash(f"Error fetching counts: {e}", "danger")
@@ -1038,21 +1048,32 @@ def qr_scan_counts():
         cur.close()
         conn.close()
 
-    from calendar import month_name
-    from datetime import datetime
+    # build month dropdown from actual data
+    all_months = sorted(
+        {d.strftime("%Y-%m") for d in counts_by_date.keys()},
+        reverse=True
+    )
+    month_options = [
+        {"value": m, "name": f"{month_name[int(m.split('-')[1])]} {m.split('-')[0]}"}
+        for m in all_months
+    ]
 
-    months = [{'value': f"{datetime.now().year}-{i:02}", 'name': month_name[i]} for i in range(1, 13)]
-
-    # Sort ascending
-    sorted_counts = []
-    for date_obj, meals in sorted(counts_by_date.items(), key=lambda x: x[0]):
-        sorted_counts.append({
-            "date": date_obj.strftime("%d-%m-%Y"),   # formatted for display
-            "month_key": date_obj.strftime("%Y-%m"), # for filtering
+    # final list for template
+    sorted_counts = [
+        {
+            "date": d.strftime("%d-%m-%Y"),    # Indian dd-mm-yyyy format
+            "month_key": d.strftime("%Y-%m"),  # used for filtering
             "meals": meals
-        })
+        }
+        for d, meals in sorted(counts_by_date.items())
+    ]
 
-    return render_template("admin_qr_count.html", counts_by_date=sorted_counts, months=months)
+    return render_template(
+        "admin_qr_count.html",
+        counts_by_date=sorted_counts,
+        months=month_options,
+        selected_month=selected_month
+    )
 
 
 
@@ -1104,46 +1125,75 @@ from datetime import date
 import MySQLdb
 
 # ---------------- ADMIN: LIVE COUNT FOR TODAY ----------------
+from flask import jsonify
+from flask_login import login_required
+from datetime import date
+
 @app.route('/admin/live_count/<meal_type>')
 @login_required
 def live_count(meal_type):
+    """Return the *current* attendance count for the given meal type today."""
     if not getattr(current_user, 'is_admin', False):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+        return jsonify(success=False, message="Unauthorized"), 403
+
+    if meal_type not in ("breakfast", "lunch", "dinner"):
+        return jsonify(success=False, message="Invalid meal type"), 400
 
     today = date.today()
-    conn = mysql_pool.get_connection()          # Get connection from pool
-    cur = conn.cursor(dictionary=True)          # DictCursor
+    total = 0
 
+    conn = None
+    cur = None
     try:
-        cur.execute("""
-            SELECT COUNT(*) AS total FROM meal_attendance
-            WHERE attendance_date=%s AND meal_type=%s
-        """, (today, meal_type))
-        result = cur.fetchone()
-        total = result['total'] if result else 0
-    except MySQLdb.Error as e:
-        total = 0
-        print("DB error in live_count:", e)
+        conn = mysql_pool.get_connection()
+        # use buffered=True to ensure the connection is fully read
+        cur = conn.cursor(dictionary=True, buffered=True)
+        cur.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM meal_attendance
+            WHERE attendance_date = %s AND meal_type = %s
+            """,
+            (today, meal_type),
+        )
+        row = cur.fetchone()
+        total = row["total"] if row else 0
+
+    except Exception as e:
+        app.logger.error("Live count DB error: %s", e)
+        return jsonify(success=False, message="Database error"), 500
     finally:
-        cur.close()
-        conn.close()                            # Return connection to pool
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()   # ✅ Always return connection to the pool
 
-    return jsonify({'success': True, 'meal_type': meal_type, 'count': total})
-
+    return jsonify(success=True, meal_type=meal_type, count=total)
 
 # ---------------- ADMIN: VIEW HISTORICAL QR SCAN COUNTS ----------------
+from flask import render_template, flash, redirect, url_for
+from flask_login import login_required, current_user
+from datetime import datetime, date
+import MySQLdb
+
 @app.route('/admin/qr_scan_counts')
 @login_required
 def admin_qr_count():
+    """
+    Show daily QR-scan counts grouped by date and meal type.
+    """
     if not getattr(current_user, 'is_admin', False):
         flash("Unauthorized access", "danger")
         return redirect(url_for('user_dashboard'))
 
     counts_by_date = {}
-    conn = mysql_pool.get_connection()          # Get connection from pool
-    cur = conn.cursor()
 
+    conn = None
+    cur = None
     try:
+        conn = mysql_pool.get_connection()
+        # dictionary cursor to get named columns
+        cur = conn.cursor(dictionary=True, buffered=True)
         cur.execute("""
             SELECT meal_date, meal_type, total_count
             FROM daily_meal_attendance
@@ -1152,23 +1202,49 @@ def admin_qr_count():
         rows = cur.fetchall()
 
         for row in rows:
-            date_str = row[0].strftime("%Y-%m-%d")
-            meal_type = row[1]
-            count = row[2]
+            # row["meal_date"] might be date, datetime, or string
+            raw_date = row["meal_date"]
+            if isinstance(raw_date, str):
+                meal_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+            elif isinstance(raw_date, datetime):
+                meal_date = raw_date.date()
+            elif isinstance(raw_date, date):
+                meal_date = raw_date
+            else:
+                continue  # skip unexpected types
 
-            if date_str not in counts_by_date:
-                counts_by_date[date_str] = {}
-            counts_by_date[date_str][meal_type] = count
+            date_key = meal_date.strftime("%d-%m-%Y")  # Indian-style display
+
+            if date_key not in counts_by_date:
+                counts_by_date[date_key] = {
+                    "breakfast": 0,
+                    "lunch": 0,
+                    "dinner": 0,
+                }
+
+            meal = row["meal_type"]
+            total = row["total_count"] or 0
+            counts_by_date[date_key][meal] = total
 
     except MySQLdb.Error as e:
         flash(f"Error fetching counts: {e}", "danger")
     finally:
-        cur.close()
-        conn.close()                            # Return connection to pool
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()  # ✅ always return connection to pool
 
-    return render_template("admin_qr_count.html", counts_by_date=counts_by_date)
+    # Send a sorted list to the template (latest first)
+    sorted_counts = sorted(
+        counts_by_date.items(),
+        key=lambda x: datetime.strptime(x[0], "%d-%m-%Y"),
+        reverse=True,
+    )
 
-
+    return render_template(
+        "admin_qr_count.html",
+        counts_by_date=sorted_counts
+    )
 
 
 
@@ -1176,156 +1252,226 @@ from flask import jsonify, request
 from datetime import date
 import MySQLdb
 
+from flask import request, jsonify
+from flask_login import login_required, current_user
+from datetime import date
+import MySQLdb
+
 @app.route('/admin/add_count', methods=['POST'])
 @login_required
 def add_count():
+    """
+    Save the current live QR-scan count for a meal into daily_meal_attendance.
+    """
     if not getattr(current_user, 'is_admin', False):
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
+    # ----- Read request data -----
     data = request.get_json(silent=True) or request.form
-    meal_type = data.get('meal_type')
+    meal_type = (data.get('meal_type') or '').lower()
+    # default to today if no date passed
     meal_date = data.get('meal_date') or date.today().isoformat()
 
-    if meal_type not in ['breakfast', 'lunch', 'dinner']:
+    # Validate meal_type
+    if meal_type not in ('breakfast', 'lunch', 'dinner'):
         return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
 
-    count = live_counts.get(meal_type, 0)
-    if count == 0:
+    # Read current live count (global dict must exist)
+    current_count = int(live_counts.get(meal_type, 0))
+    if current_count <= 0:
         return jsonify({'success': False, 'message': 'No live count to save'}), 400
 
-    conn = mysql_pool.get_connection()   # Get connection from pool
-    cur = conn.cursor()
-
+    conn = None
+    cur = None
     try:
-        # Insert or update total count
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor()
+
+        # Insert or update: add to existing total_count
         cur.execute("""
             INSERT INTO daily_meal_attendance (meal_date, meal_type, total_count)
             VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE total_count = total_count + VALUES(total_count)
-        """, (meal_date, meal_type, count))
+            ON DUPLICATE KEY UPDATE
+                total_count = total_count + VALUES(total_count)
+        """, (meal_date, meal_type, current_count))
         conn.commit()
 
-        # Reset live count
+        # Reset the live counter AFTER successful commit
         live_counts[meal_type] = 0
 
         return jsonify({
             'success': True,
             'meal_type': meal_type,
-            'total_people_added': count,
+            'added_count': current_count,
             'meal_date': meal_date
         })
 
     except MySQLdb.Error as e:
-        conn.rollback()
-        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False,
+                        'message': f'Database error: {e}'}), 500
 
     finally:
-        cur.close()
-        conn.close()  # Return connection to pool
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()   # ✅ always return to pool
+
 
 
 from flask import flash, redirect, url_for, render_template, request
+from flask_login import login_required, current_user
+from datetime import datetime
 import MySQLdb
 
 @app.route('/admin/add_meal_count', methods=['GET', 'POST'])
 @login_required
 def add_meal_count():
+    """Allow admins to manually increment a meal count for a given date/type,
+       and list all recorded counts grouped by date.
+    """
     if not getattr(current_user, 'is_admin', False):
         flash("Unauthorized access", "danger")
         return redirect(url_for('admin_dashboard'))
 
+    # ---------------- POST: add a count ----------------
     if request.method == 'POST':
         meal_date = request.form.get('meal_date')
-        meal_type = request.form.get('meal_type')
+        meal_type = (request.form.get('meal_type') or '').lower()
 
-        if not meal_date or meal_type not in ['breakfast', 'lunch', 'dinner']:
+        # Validate inputs
+        if not meal_date or meal_type not in ('breakfast', 'lunch', 'dinner'):
             flash("Invalid input", "danger")
             return redirect(url_for('add_meal_count'))
 
-        conn = mysql_pool.get_connection()  # Get connection from pool
-        cur = conn.cursor()
-
+        # Ensure we store date as YYYY-MM-DD
         try:
-            # Insert or update count
+            # Will raise if format is wrong
+            meal_date_obj = datetime.strptime(meal_date, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Invalid date format", "danger")
+            return redirect(url_for('add_meal_count'))
+
+        conn, cur = None, None
+        try:
+            conn = mysql_pool.get_connection()
+            cur = conn.cursor()
+
+            # Insert or increment existing count
             cur.execute("""
                 INSERT INTO meal_counts (meal_date, meal_type, count)
                 VALUES (%s, %s, 1)
                 ON DUPLICATE KEY UPDATE count = count + 1
-            """, (meal_date, meal_type))
+            """, (meal_date_obj, meal_type))
             conn.commit()
-            flash(f"{meal_type.capitalize()} count added for {meal_date}", "success")
 
-        except Exception as e:
-            conn.rollback()
-            flash(f"Database error: {str(e)}", "danger")
+            flash(f"{meal_type.capitalize()} count added for {meal_date_obj.strftime('%d-%m-%Y')}", "success")
+
+        except MySQLdb.Error as e:
+            if conn:
+                conn.rollback()
+            flash(f"Database error: {e}", "danger")
 
         finally:
-            cur.close()
-            conn.close()  # Return connection to pool
+            if cur: cur.close()
+            if conn: conn.close()  # always return to pool
 
         return redirect(url_for('add_meal_count'))
 
-    # ---------------- GET: fetch counts ----------------
-    conn = mysql_pool.get_connection()
-    cur = conn.cursor(MySQLdb.cursors.DictCursor)
-
-    try:
-        cur.execute("SELECT meal_date, meal_type, count FROM meal_counts ORDER BY meal_date DESC")
-        rows = cur.fetchall()
-    except Exception as e:
-        flash(f"Database error: {str(e)}", "danger")
-        rows = []
-    finally:
-        cur.close()
-        conn.close()  # Return connection to pool
-
-    # Organize by date
+    # ---------------- GET: fetch and group counts ----------------
     counts_by_date = {}
-    for row in rows:
-        date_str = row['meal_date'].strftime("%Y-%m-%d")
-        if date_str not in counts_by_date:
-            counts_by_date[date_str] = {}
-        counts_by_date[date_str][row['meal_type']] = row['count']
+    conn, cur = None, None
+    try:
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
-    return render_template("admin_meal_count.html", counts_by_date=counts_by_date)
+        cur.execute("""
+            SELECT meal_date, meal_type, count
+            FROM meal_counts
+            ORDER BY meal_date DESC
+        """)
+        rows = cur.fetchall()
 
+        for row in rows:
+            # Ensure we have a date object
+            meal_date = row['meal_date']
+            if isinstance(meal_date, datetime):
+                meal_date = meal_date.date()
+            date_key = meal_date.strftime("%d-%m-%Y")   # Indian-style display
 
-from flask import jsonify, flash, redirect, url_for, render_template, request
+            if date_key not in counts_by_date:
+                counts_by_date[date_key] = {}
+            counts_by_date[date_key][row['meal_type']] = row['count']
+
+    except MySQLdb.Error as e:
+        flash(f"Database error: {e}", "danger")
+
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+    # Render page with grouped counts
+    return render_template(
+        "admin_meal_count.html",
+        counts_by_date=counts_by_date
+    )
+
+from flask import jsonify
+from flask_login import login_required, current_user
 from datetime import date
 import MySQLdb
 
-# ---------------- ADMIN: Get today's meal counts per user ----------------
 @app.route('/admin/users_meal_counts')
 @login_required
 def users_meal_counts():
+    """
+    Return, as JSON, today’s scan counts grouped by user
+    for each meal type (breakfast / lunch / dinner).
+    """
     if not getattr(current_user, 'is_admin', False):
-        return jsonify({'error': 'Unauthorized: admin only'}), 403
+        return jsonify({'success': False, 'message': 'Unauthorized: admin only'}), 403
 
     today = date.today()
     counts = {}
 
-    conn = mysql_pool.get_connection()
-    cur = conn.cursor(MySQLdb.cursors.DictCursor)
-
+    conn, cur = None, None
     try:
-        for meal in ['breakfast', 'lunch', 'dinner']:
-            cur.execute("""
-                SELECT u.name, u.email, u.course, COUNT(ma.id) AS total_scans
-                FROM meal_attendance ma
-                JOIN users u ON ma.user_id = u.id
-                WHERE ma.meal_type=%s AND ma.attendance_date=%s
-                GROUP BY ma.user_id
-            """, (meal, today))
+        conn = mysql_pool.get_connection()
+        # DictCursor gives column names as keys
+        cur = conn.cursor(MySQLdb.cursors.DictCursor)
+
+        # Loop through each meal type and fetch user-level counts
+        for meal in ('breakfast', 'lunch', 'dinner'):
+            cur.execute(
+                """
+                SELECT 
+                    u.name,
+                    u.email,
+                    u.course,
+                    COUNT(ma.id) AS total_scans
+                FROM meal_attendance AS ma
+                JOIN users AS u ON ma.user_id = u.id
+                WHERE ma.meal_type = %s
+                  AND ma.attendance_date = %s
+                GROUP BY ma.user_id, u.name, u.email, u.course
+                ORDER BY u.name ASC
+                """,
+                (meal, today)  # today is a date object, MySQLdb handles it
+            )
             counts[meal] = cur.fetchall()
 
         return jsonify({'success': True, 'data': counts})
 
     except MySQLdb.Error as e:
-        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+        # Capture any DB-specific error
+        return jsonify({'success': False, 'message': f'Database error: {e}'}), 500
 
     finally:
-        cur.close()
-        conn.close()  # Return connection to pool
+        # Always close resources to avoid pool exhaustion
+        if cur: cur.close()
+        if conn: conn.close()
+
 
 
 # ---------------- ADMIN: Add mess cut for any user ----------------
