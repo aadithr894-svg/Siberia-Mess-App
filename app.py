@@ -33,17 +33,7 @@ mysql_pool = pooling.MySQLConnectionPool(
 
 
 # --- Setup MySQL connection pool ---
-try:
-    mysql_pool = pooling.MySQLConnectionPool(
-        pool_name="mypool",
-        pool_size=10,          # number of connections in the pool
-        pool_reset_session=True,
-        **dbconfig
-    )
-    print("✅ MySQL connection pool created successfully")
-except Error as e:
-    print(f"❌ Error creating MySQL connection pool: {e}")
-    raise
+
 
 # --- Helper function to get connection ---
 def get_db_connection():
