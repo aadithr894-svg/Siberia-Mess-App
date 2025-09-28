@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid mt-4">
+    <h2 class="mb-4 text-primary fw-bold">My Monthly Bills</h2>
+
+    {% if bills %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+            {% for bill in bills %}
+            <div class="col">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-body">
+                        <h6 class="card-title text-secondary mb-2">{{ bill.bill_date.strftime("%B %Y") }}</h6>
+                        <ul class="list-group list-group-flush mb-3">
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Daily Amount</span>
+                                <span>₹{{ "%.2f"|format(bill.daily_amount) }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Active Days</span>
+                                <span>{{ bill.active_days }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Mess Cut Days</span>
+                                <span>{{ bill.mess_cut_days }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Reduction</span>
+                                <span class="text-danger">₹{{ "%.2f"|format(bill.reduction_amount) }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Establishment Fee</span>
+                                <span class="text-info">₹{{ "%.2f"|format(bill.establishment_fee) }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Fines</span>
+                                <span class="text-warning">₹{{ "%.2f"|format(bill.total_fines) }}</span>
+                            </li>
+                        </ul>
+                        <h5 class="fw-bold text-success text-end">Total: ₹{{ "%.2f"|format(bill.total_amount) }}</h5>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info text-center mt-4">
+            No bills available.
+        </div>
+    {% endif %}
+</div>
+
+<style>
+.card {
+    border-radius: 14px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+}
+.list-group-item {
+    border: none;
+    padding: 0.75rem 1rem;
+    background: transparent;
+}
+@media (max-width: 768px) {
+    .card h5 {
+        font-size: 1rem;
+    }
+}
+</style>
+
+{% endblock %}

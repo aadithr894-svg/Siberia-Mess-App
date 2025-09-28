@@ -7,16 +7,24 @@ import base64
 from datetime import datetime, time
 from config import Config
 from mysql.connector import pooling
+from flask_mysqldb import MySQL
+
 
 # ---------------- Flask App ----------------
 app = Flask(__name__)
-app.config.from_object(Config)
 
+dbconfig = {
+    "host": "localhost",    # or "localhost"
+    "user": "root",         # your MySQL username
+    "password": "mysql123",         # your MySQL password
+    "database": "w_mess_app"  # your database name
+}
 # ---------------- MySQL Connection Pool ----------------
 # app.py (or wherever you configure your DB)
 import os
 from mysql.connector import pooling, Error
 from mysql.connector import pooling
+<<<<<<< HEAD
 
 mysql_pool = pooling.MySQLConnectionPool(
     pool_name="mypool",
@@ -28,16 +36,43 @@ mysql_pool = pooling.MySQLConnectionPool(
     password="Admin321"   # ✅ your RDS password
 )
 
+=======
+>>>>>>> origin/main
 
-# --- Load DB config from environment variables ---
-dbconfig = {
-    "host": os.environ.get("MYSQL_HOST"),
-    "user": os.environ.get("MYSQL_USER"),
-    "password": os.environ.get("MYSQL_PASSWORD"),
-    "database": os.environ.get("MYSQL_DB"),
-    "port": int(os.environ.get("MYSQL_PORT", 3306))
-    
-}
+mysql_pool = pooling.MySQLConnectionPool(
+    pool_name="mypool",
+    pool_size=5,
+    pool_reset_session=True,
+    host="mydb.cfc0uui6evlw.eu-north-1.rds.amazonaws.com",  # ✅ RDS endpoint
+    database="mess_app",  # ✅ your database name
+    user="root",          # ✅ your RDS username
+    password="Admin321"   # ✅ your RDS password
+)
+app = Flask(__name__)
+app.config.from_object(Config)
+
+mysql = MySQL(app)
+# Connect directly
+def get_db_connection():
+    return mysql.connector.connect(
+        host='localhost',
+        user='root',
+        password='mysql123',
+        database='w_mess_app'
+    )
+# ---------------- LOGIN MANAGER ----------------
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# ---------------- USER CLASS ----------------
+class User(UserMixin):
+    def __init__(self, id, name, email, user_type):
+        self.id = id
+        self.name = name
+        self.email = email
+        self.user_type = user_type
+        self.is_admin = user_type == 'admin'
 
 
 # --- Setup MySQL connection pool ---
@@ -99,26 +134,26 @@ def create_admin():
     cur = conn.cursor(dictionary=True)            # DictCursor equivalent
 
     # Check if admin already exists
-    cur.execute("SELECT * FROM users WHERE email = %s", ("siberiamess4@gmail.com",))
+    cur.execute("SELECT * FROM users WHERE email = %s", ("hostelmess@gmail.com",))
     admin = cur.fetchone()
 
-    hashed_password = generate_password_hash("siberia@123")
+    hashed_password = generate_password_hash("hostel@123")
 
     if not admin:
         # Insert new admin
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, ("Admin", "siberiamess4@gmail.com", "0000000000", "N/A", hashed_password, "admin", 1))
+        """, ("Admin", "hostelmess@gmail.com", "0000000000", "N/A", hashed_password, "admin", 1))
         conn.commit()
-        print("✅ Default admin created: siberiamess4@gmail.com, password=siberia@123")
+        print("✅ Default admin created: hostelmess@gmail.com, password=hostel@123")
     else:
         # Make sure admin is approved and user_type is admin
         cur.execute("""
             UPDATE users
             SET user_type=%s, approved=%s, password=%s
             WHERE email=%s
-        """, ("admin", 1, hashed_password, "siberiamess4@gmail.com"))
+        """, ("admin", 1, hashed_password, "hostelmess@gmail.com"))
         conn.commit()
         print("ℹ️ Admin already exists. Reset password and ensured approved=1.")
 
@@ -264,7 +299,7 @@ def reset_admin():
         cur.execute("""
             INSERT INTO users (name, email, phone, course, password, user_type, approved)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, ("Admin", "siberiamess4@gmail.com", "0000000000", "N/A",
+        """, ("Admin", "hostelmess@gmail.com", "0000000000", "N/A",
               hashed_password, "admin", 1))
         conn.commit()
     except Exception as e:
@@ -273,7 +308,7 @@ def reset_admin():
         cur.close()
         conn.close()                              # Return connection to pool
 
-    return "✅ Admin reset: siberiamess4@gmail.com, password=siberia@123"
+    return "✅ Admin reset: hostelmess@gmail.com, password=hostel@123"
 
 
 #Approval
@@ -927,14 +962,23 @@ def scan_qr():
 
     conn = mysql_pool.get_connection()
     try:
+<<<<<<< HEAD
         with conn.cursor(dictionary=True, buffered=True) as cur:
             # 1️⃣ Validate user
+=======
+        with conn.cursor(dictionary=True, buffered=True) as cur:  
+            # 🔹 Fetch user name
+>>>>>>> origin/main
             cur.execute("SELECT name FROM users WHERE id=%s", (user_id,))
             user = cur.fetchone()
             if not user:
                 return jsonify({'success': False, 'message': 'User not found'}), 404
 
+<<<<<<< HEAD
             # 2️⃣ Check mess cut
+=======
+            # 🔹 Check mess cut
+>>>>>>> origin/main
             cur.execute("""
                 SELECT 1 FROM mess_cut
                 WHERE user_id=%s AND start_date <= %s AND end_date >= %s
@@ -946,7 +990,24 @@ def scan_qr():
                     'name': user['name']
                 }), 403
 
+<<<<<<< HEAD
             # 3️⃣ Prevent duplicate
+=======
+            # 🔹 Check mess skip in mess_skips table
+            cur.execute(f"""
+                SELECT {meal_type} FROM mess_skips
+                WHERE user_id=%s AND skip_date=%s
+            """, (user_id, today))
+            skip = cur.fetchone()
+            if skip and skip[meal_type] == 1:
+                return jsonify({
+                    'success': False,
+                    'message': f'User has skipped {meal_type} today.',
+                    'name': user['name']
+                }), 403
+
+            # 🔹 Check duplicate scan
+>>>>>>> origin/main
             cur.execute("""
                 SELECT 1 FROM meal_attendance
                 WHERE user_id=%s AND meal_type=%s AND attendance_date=%s
@@ -988,8 +1049,11 @@ def scan_qr():
     finally:
         conn.close()
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> origin/main
 
 # -------- ADMIN: VIEW CONFIRMED QR COUNTS --------
 from flask import render_template, jsonify, request, flash
@@ -1537,6 +1601,302 @@ def add_mess_cut_admin():
     return render_template('admin_add_mess_cut.html', users=users)
 
 
+from datetime import date, datetime, timedelta
+import calendar
+from flask import request, flash, redirect, url_for, render_template
+from flask_login import login_required, current_user
+
+from datetime import date, datetime, timedelta
+import calendar
+from flask import request, flash, redirect, url_for, render_template
+from flask_login import login_required, current_user
+
+@app.route('/admin/generate_bills', methods=['GET', 'POST'])
+@login_required
+def generate_bills():
+    if not getattr(current_user, 'is_admin', False):
+        flash("Unauthorized", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    bills_generated = []
+    conn = None
+    cur = None
+
+    if request.method == 'POST':
+        try:
+            daily_amount = float(request.form.get('daily_amount', 0))
+            establishment_fee = float(request.form.get('establishment_fee', 0))
+            bill_month = request.form.get('bill_month')  # format: 'YYYY-MM'
+
+            if not daily_amount or not bill_month:
+                flash("Please provide all required fields", "warning")
+                return redirect(url_for('generate_bills'))
+
+            # Compute first and last day of the month
+            year, month = map(int, bill_month.split('-'))
+            start_date_obj = date(year, month, 1)
+            end_date_obj = date(year, month, calendar.monthrange(year, month)[1])
+
+            # Parse mess closed dates (optional)
+            closed_dates_str = request.form.get('mess_closed_dates', '')
+            closed_dates = set()
+            if closed_dates_str:
+                closed_dates = set(datetime.strptime(d.strip(), "%d-%m-%Y").date() for d in closed_dates_str.split(','))
+
+            # Active days in month minus closed dates
+            active_days = (end_date_obj - start_date_obj).days + 1
+            active_days -= sum(1 for d in closed_dates if start_date_obj <= d <= end_date_obj)
+
+            # DB connection
+            conn = mysql_pool.get_connection()
+            cur = conn.cursor(dictionary=True)
+
+            # Fetch all users
+            cur.execute("SELECT id, name FROM users")
+            users = cur.fetchall()
+
+            for user in users:
+                # Skip bills already generated for this month
+                cur.execute("""
+                    SELECT id FROM bills
+                    WHERE user_id=%s AND bill_date BETWEEN %s AND %s
+                """, (user['id'], start_date_obj, end_date_obj))
+                if cur.fetchone():
+                    continue
+
+                # Fetch mess cuts overlapping with the month
+                cur.execute("""
+                    SELECT start_date, end_date
+                    FROM mess_cut
+                    WHERE user_id=%s
+                      AND start_date <= %s
+                      AND end_date >= %s
+                """, (user['id'], end_date_obj, start_date_obj))
+                cuts = cur.fetchall()
+
+                mess_cut_days = 0
+                for cut in cuts:
+                    cut_start = max(cut['start_date'], start_date_obj)
+                    cut_end = min(cut['end_date'], end_date_obj)
+
+                    # Generate all dates in this mess cut
+                    cut_dates = set(cut_start + timedelta(days=i) for i in range((cut_end - cut_start).days + 1))
+                    # Only consider dates which are NOT closed
+                    active_cut_dates = cut_dates - closed_dates
+
+                    # Apply only if >=3 active days
+                    if len(active_cut_dates) >= 3:
+                        mess_cut_days += len(active_cut_dates)
+
+                # Calculate reduction
+                reduction_amount = round(0.67 * daily_amount * mess_cut_days, 2)
+
+                # 🔹 Fetch fines for this user in billing month (scan fines included)
+                cur.execute("""
+                    SELECT SUM(fine_amount) AS total_fines
+                    FROM fines
+                    WHERE user_id=%s AND fine_date BETWEEN %s AND %s
+                """, (user['id'], start_date_obj, end_date_obj))
+                fine_row = cur.fetchone()
+                total_fines = fine_row['total_fines'] or 0.0
+
+                # Total amount including establishment fee and fines
+                total_amount = round(daily_amount * active_days - reduction_amount + establishment_fee + total_fines, 2)
+
+                # Insert bill into DB
+                cur.execute("""
+                    INSERT INTO bills
+                    (user_id, bill_date, daily_amount, active_days, mess_cut_days, reduction_amount, establishment_fee, total_fines, total_amount)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    user['id'], date.today(), daily_amount, active_days,
+                    mess_cut_days, reduction_amount, establishment_fee, total_fines, total_amount
+                ))
+
+                # Prepare for frontend display
+                bills_generated.append({
+                    'user': user['name'],
+                    'mess_cut_days': mess_cut_days,
+                    'closed_dates': sorted([d.strftime("%d-%m-%Y") for d in closed_dates if start_date_obj <= d <= end_date_obj]),
+                    'establishment_fee': establishment_fee,
+                    'total_fines': total_fines,
+                    'total_amount': total_amount,
+                    'bill_month': bill_month
+                })
+
+            conn.commit()
+            flash(f"✅ Bills generated successfully for {len(bills_generated)} users!", "success")
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            flash(f"Error generating bills: {str(e)}", "danger")
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    return render_template('admin_generate_bills.html', bills_generated=bills_generated)
+
+
+from datetime import datetime, time
+
+MESS_WINDOWS = {
+    'breakfast': (time(7,30), time(9,30)),
+    'lunch': (time(12,0), time(14,0)),
+    'dinner': (time(19,0), time(21,0)),
+}
+
+
+
+
+from flask import jsonify, request, render_template
+from flask_login import login_required, current_user
+from datetime import date
+
+@app.route('/admin/non_scanned/<meal_type>')
+@login_required
+def non_scanned_users(meal_type):
+    if not current_user.is_admin:
+        flash("Unauthorized", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    if meal_type not in ['breakfast','lunch','dinner']:
+        flash("Invalid meal type", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    today = date.today()
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # Users who didn't scan for this meal today
+        cur.execute("""
+            SELECT id, name FROM users
+            WHERE id NOT IN (
+                SELECT user_id FROM meal_attendance
+                WHERE meal_type=%s AND attendance_date=%s
+            )
+        """, (meal_type, today))
+        users = cur.fetchall()
+
+        # Users who already got fine
+        cur.execute("""
+            SELECT user_id FROM fines
+            WHERE fine_date=%s AND meal_type=%s
+        """, (today, meal_type))
+        fined = {row['user_id'] for row in cur.fetchall()}
+
+        return render_template('admin_add_fine.html', users=users, fined=fined, meal_type=meal_type, today=today)
+    finally:
+        cur.close()
+        conn.close()
+
+
+        
+def get_current_meal():
+    now = datetime.now()
+    hours = now.hour + now.minute / 60
+    if 7.5 <= hours <= 9:
+        return 'breakfast'
+    elif 12 <= hours <= 14:
+        return 'lunch'
+    else:
+        return 'dinner'
+
+
+
+    
+from flask import render_template, request, flash, redirect, url_for
+from flask_login import login_required, current_user
+from datetime import date
+
+@app.route('/admin/add_fine', methods=['GET', 'POST'])
+@login_required
+def add_fine():
+    if not getattr(current_user, 'is_admin', False):
+        flash("Unauthorized", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    today = date.today()
+    non_scanned_users = []
+
+    try:
+        # Fetch users who have not scanned today for any meal
+        cur.execute("""
+            SELECT u.id, u.name
+            FROM users u
+            WHERE u.is_active = 1
+            AND u.id NOT IN (
+                SELECT user_id FROM meal_attendance WHERE attendance_date = %s
+            )
+        """, (today,))
+        non_scanned_users = cur.fetchall()
+
+        if request.method == 'POST':
+            fines = request.form.getlist('fine')      # list of fine amounts
+            user_ids = request.form.getlist('user_id') # list of user ids
+
+            for uid, fine_amount in zip(user_ids, fines):
+                fine_amount = float(fine_amount) if fine_amount else 0
+                if fine_amount > 0:
+                    # Insert into fines table
+                    cur.execute("""
+                        INSERT INTO fines (user_id, fine_date, amount)
+                        VALUES (%s, %s, %s)
+                        ON DUPLICATE KEY UPDATE amount=%s
+                    """, (uid, today, fine_amount, fine_amount))
+            conn.commit()
+            flash(f"✅ Fines added for {len(user_ids)} students!", "success")
+            return redirect(url_for('add_fine'))
+
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error: {str(e)}", "danger")
+    finally:
+        cur.close()
+        conn.close()
+
+    return render_template('admin_add_fine.html', non_scanned_users=non_scanned_users, today=today)
+
+
+
+@app.route('/user/bills')
+@login_required
+def user_bills():
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    bills = []
+    try:
+        cur.execute("""
+            SELECT bill_date, daily_amount, active_days, mess_cut_days,
+                   reduction_amount, establishment_fee, total_fines, total_amount
+            FROM bills
+            WHERE user_id=%s
+            ORDER BY bill_date DESC
+        """, (current_user.id,))
+        bills = cur.fetchall()
+
+        # Convert bill_date to date object if it's a string
+        for bill in bills:
+            if isinstance(bill['bill_date'], str):
+                bill['bill_date'] = datetime.strptime(bill['bill_date'], "%Y-%m-%d").date()
+
+    except Exception as e:
+        flash(f"Error fetching bills: {str(e)}", "danger")
+
+    finally:
+        cur.close()
+        conn.close()
+
+    return render_template('user_bills.html', bills=bills)
+
+
 
 
 # ---------------- ADMIN: Get all users' mess count ----------------
@@ -1679,7 +2039,95 @@ def reset_late_mess():
             conn.close()
         return f"❌ Error resetting late mess: {str(e)}", 500
 
+from flask import request, flash, redirect, url_for, render_template
+from flask_login import login_required, current_user
+from datetime import datetime
+from mysql.connector import Error
 
+@app.route('/user/mess_skip', methods=['GET', 'POST'])
+@login_required
+def mess_skip():
+    if request.method == 'POST':
+        skip_date = request.form.get('skip_date')
+        meals = [meal for meal in ['breakfast', 'lunch', 'dinner'] if meal in request.form]
+
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor()
+
+        try:
+            for meal in meals:
+                cur.execute("""
+                    INSERT INTO mess_skips (user_id, skip_date, meal_type)
+                    VALUES (%s, %s, %s)
+                    ON DUPLICATE KEY UPDATE user_id=user_id
+                """, (current_user.id, skip_date, meal))
+            conn.commit()
+            flash("✅ Mess skip updated successfully!", "success")
+        except Exception as e:
+            conn.rollback()
+            flash(f"Error: {str(e)}", "danger")
+        finally:
+            cur.close()
+            conn.close()
+
+        return redirect(url_for('mess_skip'))
+
+    return render_template('user_mess_skip.html')
+
+
+
+
+@app.route('/admin/mess_skips')
+@login_required
+def admin_mess_skips():
+    if not getattr(current_user, 'is_admin', False):
+        flash("Unauthorized access!", "danger")
+        return redirect(url_for('index'))
+
+    tomorrow = date.today() + timedelta(days=1)
+    skips = {'breakfast': [], 'lunch': [], 'dinner': []}
+    skip_counts = {'breakfast': 0, 'lunch': 0, 'dinner': 0}
+
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # 🔹 Explicitly print what we're querying
+        print(f"Fetching mess skips for date: {tomorrow}")
+
+        cur.execute("""
+            SELECT s.meal_type, u.name
+            FROM mess_skips s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.skip_date = %s
+        """, (tomorrow,))
+        rows = cur.fetchall()
+
+        if not rows:
+            print("No skips found for tomorrow!")
+
+        for row in rows:
+            meal = row['meal_type']
+            name = row['name']
+            if meal in skips:
+                skips[meal].append(name)
+                skip_counts[meal] += 1
+            else:
+                print(f"Unexpected meal_type in DB: {meal}")
+
+    except Exception as e:
+        flash(f"Error fetching mess skips: {e}", "danger")
+        print(f"DB Error: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+    print(f"Skip counts: {skip_counts}")
+    print(f"Skips data: {skips}")
+
+    return render_template("admin_mess_skips.html",
+                           skips=skips,
+                           skip_counts=skip_counts,
+                           tomorrow=tomorrow)
 
 from flask import jsonify, request, render_template
 import MySQLdb.cursors

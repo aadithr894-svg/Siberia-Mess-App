@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container my-4">
+    <h2 class="mb-4 text-center">🍽️ Mess Skips for {{ tomorrow.strftime('%d-%m-%Y') }}</h2>
+
+    <div class="row g-3 justify-content-center">
+        {% for meal in ['breakfast', 'lunch', 'dinner'] %}
+        <div class="col-12 col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header text-center bg-primary text-white">
+                    <h4 class="mb-0">{{ meal.capitalize() }}</h4>
+                </div>
+                <div class="card-body">
+                    <p class="fs-3 fw-bold text-danger text-center">{{ skip_counts[meal] }}</p>
+                    {% if skips[meal] %}
+                        <ul class="list-group list-group-flush">
+                            {% for name in skips[meal] %}
+                                <li class="list-group-item list-group-item-action">
+                                    {{ name }}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-center text-muted">No skips</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+/* Smooth hover effect for list items */
+.list-group-item-action:hover {
+    background-color: #f0f8ff;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+/* Card shadow on hover */
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    transition: 0.3s;
+}
+
+/* Mobile adjustments */
+@media (max-width: 767px) {
+    .fs-3 { font-size: 1.8rem; }
+}
+</style>
+{% endblock %}
