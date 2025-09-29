@@ -48,8 +48,8 @@ function detectMeal() {
   const hours = now.getHours() + now.getMinutes()/60;
   if (hours >= 7.5 && hours <= 9) return 'breakfast';
   if (hours >= 12 && hours <= 14) return 'lunch';
-  if (hours >= 19.25 && hours <= 21.5) return 'lunch';
-  return 'dinner';
+  if (hours >= 19.25 && hours <= 21.5) return 'dinner';
+  return 'Closed';
 }
 
 // Periodic live count update (every 2 minutes)
