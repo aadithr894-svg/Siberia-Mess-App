@@ -1244,8 +1244,7 @@ from flask import jsonify, request
 from datetime import date
 import MySQLdb
 
-from flask import request, jsonify
-from flask_login import login_required, current_user
+from flask import jsonify, request
 from datetime import date
 import MySQLdb
 
@@ -1253,63 +1252,53 @@ import MySQLdb
 @login_required
 def add_count():
     """
-    Save the current live QR-scan count for a meal into daily_meal_attendance.
+    Save the confirmed count for a given meal and date.
+    Supports: breakfast, lunch, dinner.
     """
-    if not getattr(current_user, 'is_admin', False):
+    if not current_user.is_admin:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    # ----- Read request data -----
     data = request.get_json(silent=True) or request.form
-    meal_type = (data.get('meal_type') or '').lower()
-    # default to today if no date passed
-    meal_date = data.get('meal_date') or date.today().isoformat()
+    meal_type = data.get('meal_type')
+    meal_date = data.get('meal_date') or date.today()
 
-    # Validate meal_type
-    if meal_type not in ('breakfast', 'lunch', 'dinner'):
+    # ❌ snacks removed
+    if meal_type not in ['breakfast', 'lunch', 'dinner']:
         return jsonify({'success': False, 'message': 'Invalid meal type'}), 400
 
-    # Read current live count (global dict must exist)
-    current_count = int(live_counts.get(meal_type, 0))
-    if current_count <= 0:
-        return jsonify({'success': False, 'message': 'No live count to save'}), 400
-
-    conn = None
-    cur = None
+    conn = mysql_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
     try:
-        conn = mysql_pool.get_connection()
-        cur = conn.cursor()
+        # Count current attendance for that meal & date
+        cur.execute("""
+            SELECT COUNT(*) AS c
+            FROM meal_attendance
+            WHERE meal_type=%s AND attendance_date=%s
+        """, (meal_type, meal_date))
+        row = cur.fetchone()
+        count = row['c'] if row else 0
 
-        # Insert or update: add to existing total_count
+        if count == 0:
+            return jsonify({'success': False, 'message': 'No attendance to save'}), 400
+
+        # Insert or update the daily total
         cur.execute("""
             INSERT INTO daily_meal_attendance (meal_date, meal_type, total_count)
             VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                total_count = total_count + VALUES(total_count)
-        """, (meal_date, meal_type, current_count))
+            ON DUPLICATE KEY UPDATE total_count = VALUES(total_count)
+        """, (meal_date, meal_type, count))
         conn.commit()
-
-        # Reset the live counter AFTER successful commit
-        live_counts[meal_type] = 0
 
         return jsonify({
             'success': True,
             'meal_type': meal_type,
-            'added_count': current_count,
-            'meal_date': meal_date
+            'total_people_added': count,
+            'meal_date': str(meal_date)
         })
 
-    except MySQLdb.Error as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False,
-                        'message': f'Database error: {e}'}), 500
-
     finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()   # ✅ always return to pool
-
+        cur.close()
+        conn.close()
 
 
 from flask import flash, redirect, url_for, render_template, request
