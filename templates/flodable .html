@@ -1,0 +1,406 @@
+import React, { useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { Ship, Calculator, Download, Upload } from 'lucide-react';
+
+export default function FloodableLengthCalculator() {
+  const [shipData, setShipData] = useState({
+    lwl: 100,
+    lbp: 98,
+    kg: 6.5,
+    draft: 5.5,
+    permeability: 0.85,
+    criterionNumber: 1 // 1-compartment standard
+  });
+
+  const [offsetData, setOffsetData] = useState([]);
+  const [results, setResults] = useState(null);
+  const [pasteMode, setPasteMode] = useState(true);
+
+  const handlePasteOffsets = (text) => {
+    const lines = text.trim().split('\n');
+    const data = [];
+    
+    for (let line of lines) {
+      // Remove extra spaces and split by whitespace or comma
+      const values = line.trim().split(/[\s,]+/).filter(v => v);
+      if (values.length >= 2) {
+        const station = parseFloat(values[0]);
+        const halfBreadths = values.slice(1).map(v => parseFloat(v)).filter(v => !isNaN(v));
+        
+        if (!isNaN(station) && halfBreadths.length > 0) {
+          data.push({
+            station: station,
+            halfBreadths: halfBreadths
+          });
+        }
+      }
+    }
+    
+    if (data.length > 0) {
+      setOffsetData(data);
+      setPasteMode(false);
+    } else {
+      alert('Could not parse offset data. Please check format.');
+    }
+  };
+
+  const calculateFloodableLength = () => {
+    if (offsetData.length === 0) {
+      alert('Please enter offset data first');
+      return;
+    }
+
+    const { lwl, lbp, kg, draft, permeability, criterionNumber } = shipData;
+    const numStations = offsetData.length;
+    const stationSpacing = lbp / (numStations - 1);
+
+    // Calculate sectional areas and hydrostatic properties
+    const sections = offsetData.map((offset, idx) => {
+      const position = offset.station * lbp / 100; // Position from AP
+      const waterlines = offset.halfBreadths;
+      const numWL = waterlines.length;
+      const wlSpacing = draft / (numWL - 1);
+      
+      // Calculate sectional area using Simpson's rule
+      let area = 0;
+      for (let i = 0; i < numWL; i++) {
+        const multiplier = (i === 0 || i === numWL - 1) ? 1 : (i % 2 === 0 ? 2 : 4);
+        area += 2 * waterlines[i] * multiplier; // *2 for both sides
+      }
+      area = area * wlSpacing / 3;
+      
+      // Calculate moment of area (for KB calculation)
+      let momentArea = 0;
+      for (let i = 0; i < numWL; i++) {
+        const z = i * wlSpacing;
+        const multiplier = (i === 0 || i === numWL - 1) ? 1 : (i % 2 === 0 ? 2 : 4);
+        momentArea += 2 * waterlines[i] * z * multiplier;
+      }
+      momentArea = momentArea * wlSpacing / 3;
+      
+      // Calculate waterplane area at draft
+      const beam = 2 * waterlines[numWL - 1];
+      const wpArea = beam * stationSpacing;
+      
+      return {
+        position,
+        area,
+        momentArea,
+        wpArea,
+        beam,
+        maxBeam: 2 * Math.max(...waterlines)
+      };
+    });
+
+    // Calculate displacement using Simpson's rule
+    let displacement = 0;
+    for (let i = 0; i < sections.length; i++) {
+      const multiplier = (i === 0 || i === sections.length - 1) ? 1 : (i % 2 === 0 ? 2 : 4);
+      displacement += sections[i].area * multiplier;
+    }
+    displacement = displacement * stationSpacing / 3 * 1.025; // in tonnes
+
+    // Calculate KB (center of buoyancy height)
+    let volumeMoment = 0;
+    let totalVolume = 0;
+    for (let i = 0; i < sections.length; i++) {
+      const multiplier = (i === 0 || i === sections.length - 1) ? 1 : (i % 2 === 0 ? 2 : 4);
+      volumeMoment += sections[i].momentArea * multiplier;
+      totalVolume += sections[i].area * multiplier;
+    }
+    const kb = (volumeMoment / totalVolume);
+
+    // Calculate BM (metacentric radius)
+    let waterplaneInertia = 0;
+    for (let i = 0; i < sections.length; i++) {
+      const beam = sections[i].beam;
+      const il = (beam ** 3) / 12; // Second moment of area
+      const multiplier = (i === 0 || i === sections.length - 1) ? 1 : (i % 2 === 0 ? 2 : 4);
+      waterplaneInertia += il * multiplier;
+    }
+    waterplaneInertia = waterplaneInertia * stationSpacing / 3;
+    const volume = totalVolume * stationSpacing / 3;
+    const bm = waterplaneInertia / volume;
+
+    // Calculate KM and GM
+    const km = kb + bm;
+    const gm = km - kg;
+
+    // Factor of subdivision calculation (SOLAS)
+    let factorF;
+    if (lbp >= 131) {
+      factorF = 0.774;
+    } else if (lbp >= 79) {
+      factorF = 0.85 - 0.00142 * (lbp - 79);
+    } else {
+      factorF = 0.85;
+    }
+
+    // Calculate floodable length curve
+    const floodableLengthData = [];
+    
+    for (let i = 0; i < sections.length; i++) {
+      const section = sections[i];
+      const pos = section.position;
+      
+      // Lost buoyancy when compartment floods
+      const compartmentVolume = section.area * permeability;
+      const compartmentDisplacement = compartmentVolume * 1.025;
+      
+      // Vertical shift of center of buoyancy
+      const floodedCentroid = draft / 2; // Simplified
+      const kbFlooded = kb - (compartmentVolume * floodedCentroid) / volume;
+      const gmFlooded = km - kbFlooded - kg;
+      
+      // Permissible length calculation
+      // Based on maintaining minimum GM after damage
+      const minGM = 0.05; // Minimum required GM in meters
+      const gmLoss = gm - gmFlooded;
+      
+      // Floodable length formula
+      let floodableLength;
+      if (gmLoss > 0) {
+        floodableLength = Math.sqrt((gm - minGM) * volume / (section.area * permeability * 1.025)) * factorF;
+      } else {
+        floodableLength = lbp * 0.5; // Maximum if no stability issue
+      }
+      
+      // Apply criterion number (1-comp, 2-comp, etc.)
+      floodableLength = floodableLength * (criterionNumber === 1 ? 1.0 : 0.85);
+      
+      // Clamp to reasonable values
+      floodableLength = Math.max(3, Math.min(floodableLength, lbp * 0.6));
+      
+      floodableLengthData.push({
+        station: i,
+        position: pos.toFixed(1),
+        posPercent: ((pos / lbp) * 100).toFixed(1),
+        floodableLength: floodableLength.toFixed(2),
+        sectionArea: section.area.toFixed(2),
+        beam: section.beam.toFixed(2)
+      });
+    }
+
+    const avgFL = floodableLengthData.reduce((sum, d) => sum + parseFloat(d.floodableLength), 0) / floodableLengthData.length;
+    const minFL = Math.min(...floodableLengthData.map(d => parseFloat(d.floodableLength)));
+    const maxFL = Math.max(...floodableLengthData.map(d => parseFloat(d.floodableLength)));
+
+    setResults({
+      floodableLengthData,
+      displacement: displacement.toFixed(2),
+      kb: kb.toFixed(3),
+      bm: bm.toFixed(3),
+      km: km.toFixed(3),
+      gm: gm.toFixed(3),
+      factorF: factorF.toFixed(3),
+      avgFL: avgFL.toFixed(2),
+      minFL: minFL.toFixed(2),
+      maxFL: maxFL.toFixed(2)
+    });
+  };
+
+  const exportData = () => {
+    if (!results) return;
+    
+    let csv = 'Station,Position(m),Position(%),Floodable Length(m),Section Area(m²),Beam(m)\n';
+    results.floodableLengthData.forEach(row => {
+      csv += `${row.station},${row.position},${row.posPercent},${row.floodableLength},${row.sectionArea},${row.beam}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'floodable_length_results.csv';
+    a.click();
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-100 p-4">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-xl shadow-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Ship className="w-10 h-10 text-blue-600" />
+            <h1 className="text-3xl font-bold text-gray-800">Floodable Length Calculator</h1>
+          </div>
+
+          {/* Ship Parameters */}
+          <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">LWL (m)</label>
+              <input
+                type="number"
+                value={shipData.lwl}
+                onChange={(e) => setShipData({...shipData, lwl: parseFloat(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">LBP (m)</label>
+              <input
+                type="number"
+                value={shipData.lbp}
+                onChange={(e) => setShipData({...shipData, lbp: parseFloat(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">KG (m)</label>
+              <input
+                type="number"
+                value={shipData.kg}
+                onChange={(e) => setShipData({...shipData, kg: parseFloat(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Draft (m)</label>
+              <input
+                type="number"
+                value={shipData.draft}
+                onChange={(e) => setShipData({...shipData, draft: parseFloat(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Permeability</label>
+              <input
+                type="number"
+                step="0.01"
+                value={shipData.permeability}
+                onChange={(e) => setShipData({...shipData, permeability: parseFloat(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Criterion</label>
+              <select
+                value={shipData.criterionNumber}
+                onChange={(e) => setShipData({...shipData, criterionNumber: parseInt(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="1">1-Comp</option>
+                <option value="2">2-Comp</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Offset Data Input */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              📋 Copy & Paste Offset Table from Excel (Station | Half-breadths at waterlines)
+            </label>
+            <textarea
+              placeholder="Copy directly from Excel and paste here!&#10;&#10;Example:&#10;0    0.0  0.5  1.2  2.5  3.8  4.5&#10;1    1.2  2.5  3.8  5.2  6.5  7.2&#10;2    2.0  3.5  5.0  6.8  8.0  8.5&#10;3    2.5  4.0  5.5  7.2  8.5  9.0&#10;...&#10;&#10;Works with tabs, spaces, or commas!"
+              rows="10"
+              value={offsetData.length > 0 ? `✓ ${offsetData.length} stations loaded` : ''}
+              onChange={(e) => {
+                if (e.target.value && !e.target.value.startsWith('✓')) {
+                  handlePasteOffsets(e.target.value);
+                }
+              }}
+              onPaste={(e) => {
+                const text = e.clipboardData.getData('text');
+                handlePasteOffsets(text);
+                e.preventDefault();
+              }}
+              className="w-full px-4 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm hover:border-blue-400 transition"
+              style={offsetData.length > 0 ? {backgroundColor: '#f0fdf4', color: '#15803d', fontWeight: 'bold'} : {}}
+            />
+            <div className="flex justify-between items-center mt-2">
+              <p className="text-xs text-gray-500">
+                {offsetData.length > 0 
+                  ? `✓ Ready to calculate with ${offsetData.length} stations` 
+                  : 'Select your offset table in Excel (including headers or not), copy (Ctrl+C), and paste here (Ctrl+V)'}
+              </p>
+              {offsetData.length > 0 && (
+                <button
+                  onClick={() => {
+                    setOffsetData([]);
+                    setPasteMode(true);
+                  }}
+                  className="text-xs text-red-600 hover:text-red-800 underline"
+                >
+                  Clear data
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Calculate Button */}
+          <div className="flex gap-4 mb-6">
+            <button
+              onClick={calculateFloodableLength}
+              disabled={offsetData.length === 0}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition flex items-center gap-2"
+            >
+              <Calculator className="w-5 h-5" />
+              Calculate Floodable Length
+            </button>
+          </div>
+
+          {/* Results */}
+          {results && (
+            <>
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <p className="text-xs text-gray-600 mb-1">Displacement</p>
+                  <p className="text-xl font-bold text-blue-600">{results.displacement} t</p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <p className="text-xs text-gray-600 mb-1">GM</p>
+                  <p className="text-xl font-bold text-green-600">{results.gm} m</p>
+                  <p className="text-xs text-gray-500">KB:{results.kb} BM:{results.bm}</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                  <p className="text-xs text-gray-600 mb-1">Factor F</p>
+                  <p className="text-xl font-bold text-purple-600">{results.factorF}</p>
+                </div>
+                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                  <p className="text-xs text-gray-600 mb-1">Avg / Min / Max FL</p>
+                  <p className="text-xl font-bold text-amber-600">{results.avgFL}m</p>
+                  <p className="text-xs text-gray-500">{results.minFL}m / {results.maxFL}m</p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-6 rounded-lg mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold text-gray-800">Floodable Length Curve</h2>
+                  <button
+                    onClick={exportData}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export
+                  </button>
+                </div>
+                
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={results.floodableLengthData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="position" 
+                      label={{ value: 'Position from AP (m)', position: 'insideBottom', offset: -5 }}
+                    />
+                    <YAxis 
+                      label={{ value: 'Floodable Length (m)', angle: -90, position: 'insideLeft' }}
+                    />
+                    <Tooltip />
+                    <Legend />
+                    <Line 
+                      type="monotone" 
+                      dataKey="floodableLength" 
+                      stroke="#2563eb" 
+                      strokeWidth={3}
+                      name="Floodable Length"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
