@@ -185,7 +185,10 @@
             <a href="{{ url_for('user_dashboard') }}">Dashboard</a>
        
             <a href="{{ url_for('my_qr') }}">My QR Code</a>
+            <a href="{{ url_for('my_mess_cuts') }}">My Mess Cuts</a> 
             <a href="{{ url_for('mess_menu') }}">Mess Menu</a>  <!-- New Option -->
+            
+
         {% endif %}
         <a href="{{ url_for('logout') }}">Logout</a>
     {% else %}
