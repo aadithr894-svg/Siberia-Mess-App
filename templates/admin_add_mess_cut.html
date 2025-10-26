@@ -106,11 +106,6 @@
 
 <!-- Scripts -->
 <script>
-// ✅ Prevent selecting past dates
-const today = new Date().toISOString().split("T")[0];
-document.getElementById("startDate").setAttribute("min", today);
-document.getElementById("endDate").setAttribute("min", today);
-
 // ✅ Keep end date >= start date
 document.getElementById("startDate").addEventListener("change", function() {
     const start = new Date(this.value);
