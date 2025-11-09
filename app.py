@@ -22,10 +22,10 @@ mysql_pool = pooling.MySQLConnectionPool(
     pool_name="mypool",
     pool_size=5,
     pool_reset_session=True,
-    host="maglev.proxy.rlwy.net",  # ✅ RDS endpoint
+    host="shortline.proxy.rlwy.net",  # ✅ RDS endpoint
     database="mess_app",  # ✅ your database name
     user="root",          # ✅ your RDS username
-    password="KOCXKuqeNeLoDttAgygBgdCRQzTCVSrJ"   # ✅ your RDS password
+    password="WORZaQjkPNbqpcbrVHsIXbdIxTPlOJij"   # ✅ your RDS password
 )
 
 
