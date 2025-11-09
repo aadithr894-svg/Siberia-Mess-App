@@ -3,11 +3,11 @@ import os
 
 class Config:
     # MySQL configuration from Render environment variables
-    MYSQL_HOST = os.environ.get('MYSQL_HOST', 'mydb.cfc0uui6evlw.eu-north-1.rds.amazonaws.com')
+    MYSQL_HOST = os.environ.get('MYSQL_HOST', 'maglev.proxy.rlwy.net')
     MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
-    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'Admin321')
+    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'KOCXKuqeNeLoDttAgygBgdCRQzTCVSrJ')
     MYSQL_DB = os.environ.get('MYSQL_DB', 'mess_app')
-    MYSQL_PORT = int(os.environ.get('MYSQL_PORT', 3306))  # default MySQL port
+    MYSQL_PORT = int(os.environ.get('MYSQL_PORT', 12849))  # default MySQL port
 
     # Flask secret key (set this in Render as well)
     SECRET_KEY = os.environ.get('SECRET_KEY', 'supersecretkey')
