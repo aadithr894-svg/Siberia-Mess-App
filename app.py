@@ -1169,16 +1169,6 @@ import calendar
 @app.route('/admin/generate_bills', methods=['GET', 'POST'])
 @login_required
 def generate_bills():
-    """
-    FINAL VERSION:
-    • Removes daily amount.
-    • Removes establishment fee.
-    • Removes total amount.
-    • Only records: mess_cut_days, late_mess_fee.
-    • CSV output = [name, mess_cut_days, late_mess_fee].
-    • Uses 3-day open rule for mess cut.
-    """
-
     if not getattr(current_user, 'is_admin', False):
         flash("Unauthorized", "danger")
         return redirect(url_for('admin_dashboard'))
@@ -1188,94 +1178,88 @@ def generate_bills():
 
     try:
         conn = mysql_pool.get_connection()
-        cur = conn.cursor(dictionary=True, buffered=True)
+        cur = conn.cursor(dictionary=True)
 
-        if request.method == 'POST':
-
-            bill_month = request.form.get('bill_month')
+        if request.method == "POST":
+            bill_month = request.form.get("bill_month")
+            closed_str = request.form.get("mess_closed_dates", "")
 
             if not bill_month:
-                flash("Please select a month.", "warning")
-                return render_template('admin_generate_bills.html',
-                                       bills_generated=[])
+                flash("Select a month", "warning")
+                return redirect(url_for("generate_bills"))
 
-            # Month boundaries
-            year, month = map(int, bill_month.split('-'))
+            year, month = map(int, bill_month.split("-"))
             start_date = date(year, month, 1)
-            end_date = date(year, month, calendar.monthrange(year, month)[1])
+            last_day = calendar.monthrange(year, month)[1]
+            end_date = date(year, month, last_day)
 
-            # Mess closed dates
+            # parse closed days
             closed_dates = set()
-            closed_raw = request.form.get('mess_closed_dates', '')
-            if closed_raw:
-                closed_dates = {
-                    datetime.strptime(d.strip(), "%d-%m-%Y").date()
-                    for d in closed_raw.split(',') if d.strip()
-                }
+            if closed_str.strip():
+                for d in closed_str.split(","):
+                    d = d.strip()
+                    if d:
+                        closed_dates.add(
+                            datetime.strptime(d, "%d-%m-%Y").date()
+                        )
 
-            total_days = (end_date - start_date).days + 1
-            closed_count = sum(1 for d in closed_dates if start_date <= d <= end_date)
-            base_active_days = total_days - closed_count
-
-            # Delete previous bills for this month
+            # delete previous bills for this month
             cur.execute("DELETE FROM bills WHERE bill_date=%s", (start_date,))
             conn.commit()
 
-            # Active users
+            # get all users
             cur.execute("SELECT id, name FROM users")
             users = cur.fetchall()
 
+            # process each user
             for u in users:
 
-                # --- Mess Cut ---
+                # mess cut calculation (3-day rule)
                 cur.execute("""
                     SELECT start_date, end_date
                     FROM mess_cut
                     WHERE user_id=%s
-                      AND start_date <= %s
-                      AND end_date   >= %s
+                    AND start_date <= %s
+                    AND end_date >= %s
                 """, (u['id'], end_date, start_date))
 
                 cuts = cur.fetchall()
                 mess_cut_days = 0
 
-                for cut in cuts:
-                    cut_start = max(cut['start_date'], start_date)
-                    cut_end = min(cut['end_date'], end_date)
+                for c in cuts:
+                    s = max(c['start_date'], start_date)
+                    e = min(c['end_date'], end_date)
 
-                    total_cut = (cut_end - cut_start).days + 1
+                    total_days = (e - s).days + 1
 
-                    all_cut_days = [
-                        cut_start + timedelta(days=i)
-                        for i in range(total_cut)
-                    ]
+                    # mess cut only valid if >= 3 days AFTER removing closed days
+                    valid_days = []
+                    for i in range(total_days):
+                        d = s + timedelta(days=i)
+                        if d not in closed_dates:
+                            valid_days.append(d)
 
-                    # Remove mess-closed days → count only open days
-                    open_days = [d for d in all_cut_days if d not in closed_dates]
+                    if len(valid_days) >= 3:
+                        mess_cut_days += len(valid_days)
 
-                    # Must have 3 or more open days → otherwise ignore
-                    if len(open_days) >= 3:
-                        mess_cut_days += len(open_days)
-
-                # --- Late Mess Fee ---
+                # late mess fee
                 cur.execute("""
                     SELECT COUNT(*) AS c
                     FROM late_mess
                     WHERE user_id=%s
-                      AND status='approved'
-                      AND date_requested BETWEEN %s AND %s
+                    AND late_date BETWEEN %s AND %s
                 """, (u['id'], start_date, end_date))
 
-                row = cur.fetchone()
-                late_count = row['c'] if row else 0
+                late_count = cur.fetchone()['c']
                 late_fee = late_count * 5
 
-                # Insert bill (ONLY mess cuts + late fee)
+                # insert bill
                 cur.execute("""
                     INSERT INTO bills (user_id, bill_date, mess_cut_days, late_mess_fee)
                     VALUES (%s, %s, %s, %s)
                 """, (u['id'], start_date, mess_cut_days, late_fee))
 
+                # save for HTML
                 bills_generated.append({
                     "user": u['name'],
                     "mess_cut_days": mess_cut_days,
@@ -1284,55 +1268,48 @@ def generate_bills():
 
             conn.commit()
 
-            session['last_generated_bills'] = json.dumps(bills_generated)
+            # save to session for reload
+            session['last_generated_bills'] = bills_generated
             session['last_bill_month'] = bill_month
 
             flash("Bills generated successfully!", "success")
 
-        # CSV Export
-        if request.args.get('download') == 'csv':
+        # CSV export
+        if request.args.get("download") == "csv":
+            bills = session.get("last_generated_bills", [])
 
-            if not bills_generated and 'last_generated_bills' in session:
-                bills_generated = json.loads(session['last_generated_bills'])
+            si = io.StringIO()
+            writer = csv.writer(si)
+            writer.writerow(["User", "Mess Cut Days", "Late Mess Fee"])
 
-            if bills_generated:
-                si = io.StringIO()
-                writer = csv.writer(si)
+            for b in bills:
+                writer.writerow([b["user"], b["mess_cut_days"], b["late_mess_fee"]])
 
-                writer.writerow(["User", "Mess Cut Days", "Late Mess Fee"])
-
-                for b in bills_generated:
-                    writer.writerow([
-                        b['user'],
-                        b['mess_cut_days'],
-                        b['late_mess_fee']
-                    ])
-
-                return Response(
-                    si.getvalue(),
-                    mimetype="text/csv",
-                    headers={
-                        "Content-Disposition":
-                            f"attachment; filename=bills_{session.get('last_bill_month','unknown')}.csv"
-                    }
-                )
+            return Response(
+                si.getvalue(),
+                mimetype="text/csv",
+                headers={
+                    "Content-Disposition":
+                        f"attachment; filename=bills_{session.get('last_bill_month','unknown')}.csv"
+                }
+            )
 
     except Exception as e:
         if conn:
             conn.rollback()
-        print("Billing Error:", e)
         flash(f"Error generating bills: {e}", "danger")
+        current_app.logger.exception("Error generating bills")
 
     finally:
-        if cur: cur.close()
-        if conn: conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
-    # Load from session on reload
-    if not bills_generated and 'last_generated_bills' in session:
-        bills_generated = json.loads(session['last_generated_bills'])
+    # load from session
+    bills_generated = session.get("last_generated_bills", [])
 
     return render_template("admin_generate_bills.html", bills_generated=bills_generated)
-
 
 # ---------------- ADMIN: VIEW HISTORICAL QR SCAN COUNTS ----------------
 from flask import render_template, flash, redirect, url_for
