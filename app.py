@@ -1222,7 +1222,7 @@ def generate_bills():
             conn.commit()
 
             # Active users
-            cur.execute("SELECT id, name FROM users WHERE is_active = 1")
+            cur.execute("SELECT id, name FROM users")
             users = cur.fetchall()
 
             for u in users:
