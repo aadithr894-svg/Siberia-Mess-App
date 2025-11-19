@@ -52,13 +52,7 @@
                     <label for="daily_amount" class="form-label">Daily Mess Amount (₹)</label>
                     <input type="number" step="0.01" name="daily_amount" id="daily_amount" class="form-control w-100" required>
                 </div>
-                <div class="col-12 col-md-6">
-                    <label for="establishment_fee" class="form-label">Establishment Fee (₹)</label>
-                    <input type="number" step="0.01" name="establishment_fee" id="establishment_fee" class="form-control w-100" required>
-                </div>
-            </div>
 
-            <div class="row g-2 mb-3">
                 <div class="col-12 col-md-6">
                     <label for="bill_month" class="form-label">Select Month</label>
                     <input type="month" name="bill_month" id="bill_month" class="form-control w-100" required>
@@ -66,7 +60,7 @@
             </div>
 
             <div class="mb-3">
-                <label for="mess_closed_dates" class="form-label">Select Mess Closed Dates (Optional)</label>
+                <label for="mess_closed_dates" class="form-label">Mess Closed Dates (Optional)</label>
                 <input type="text" name="mess_closed_dates" id="mess_closed_dates" class="form-control w-100" placeholder="DD-MM-YYYY,DD-MM-YYYY">
                 <small class="form-text text-muted">Enter comma-separated dates when mess was closed.</small>
             </div>
@@ -82,25 +76,30 @@
             <thead class="table-dark">
                 <tr>
                     <th>User</th>
+                    <th>Active Days</th>
                     <th>Mess Cut Days</th>
-                    <th>Establishment Fee</th>
+                    <th>Late Mess Fee</th>
                     <th>Total Amount</th>
-                    <th>For Month</th>
+                    <th>Month</th>
                 </tr>
             </thead>
             <tbody>
                 {% for bill in bills_generated %}
                 <tr>
                     <td>{{ bill.user }}</td>
+                    <td>{{ bill.active_days }}</td>
                     <td>{{ bill.mess_cut_days }}</td>
-                    <td class="currency">₹{{ "{:,.2f}".format(bill.establishment_fee) }}</td>
+                    <td class="currency">₹{{ "{:,.2f}".format(bill.late_mess_fee) }}</td>
                     <td class="currency">₹{{ "{:,.2f}".format(bill.total_amount) }}</td>
-                    <td>{{ bill.bill_month | replace("-", "-") }}</td>
+                    <td>{{ session['last_bill_month'] }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    <!-- CSV Download Button -->
+    <a href="?download=csv" class="btn btn-primary mt-3">Download CSV</a>
     {% endif %}
 </div>
 

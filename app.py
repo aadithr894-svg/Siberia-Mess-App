@@ -1162,6 +1162,199 @@ def live_count(meal_type):
 
     return jsonify(success=True, meal_type=meal_type, count=total)
 
+@app.route('/admin/generate_bills', methods=['GET', 'POST'])
+@login_required
+def generate_bills():
+    """
+    Updated Version:
+    • Removed reduction_amount.
+    • Removed establishment_fee.
+    • Only bill = (daily_amount × active_days) + late_mess_fee.
+    • Mess cut only if open days ≥ 3.
+    """
+
+    if not getattr(current_user, 'is_admin', False):
+        flash("Unauthorized", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    bills_generated = []
+    conn = cur = None
+
+    try:
+        conn = mysql_pool.get_connection()
+        cur = conn.cursor(dictionary=True, buffered=True)
+
+        if request.method == 'POST':
+            daily_amount = float(request.form.get('daily_amount', 0))
+            bill_month   = request.form.get('bill_month')
+
+            if not daily_amount or not bill_month:
+                flash("Please provide all required fields", "warning")
+                return render_template('admin_generate_bills.html',
+                                       bills_generated=[])
+
+            # ------ Month Range ------
+            year, month = map(int, bill_month.split('-'))
+            start_date_obj = date(year, month, 1)
+            end_date_obj   = date(year, month, calendar.monthrange(year, month)[1])
+            bill_date = start_date_obj
+
+            # ------ Mess Closed Days ------
+            closed_dates = set()
+            closed_str = request.form.get('mess_closed_dates', '')
+            if closed_str:
+                closed_dates = {
+                    datetime.strptime(d.strip(), "%d-%m-%Y").date()
+                    for d in closed_str.split(',') if d.strip()
+                }
+
+            total_days = (end_date_obj - start_date_obj).days + 1
+            closed_count = sum(1 for d in closed_dates if start_date_obj <= d <= end_date_obj)
+            base_active_days = total_days - closed_count
+
+            # ------ Delete old bills for same month ------
+            cur.execute("DELETE FROM bills WHERE bill_date=%s", (bill_date,))
+            conn.commit()
+
+            # ------ Fetch active users ------
+            cur.execute("SELECT id, name FROM users WHERE is_active = 1")
+            users = cur.fetchall()
+
+            # ----------------------------------------------------
+            # BILL GENERATION PER USER
+            # ----------------------------------------------------
+            for user in users:
+
+                # ---------- MESS CUT WITH 3-DAY OPEN RULE ----------
+                cur.execute("""
+                    SELECT start_date, end_date
+                    FROM mess_cut
+                    WHERE user_id=%s
+                      AND start_date <= %s
+                      AND end_date   >= %s
+                """, (user['id'], end_date_obj, start_date_obj))
+                cuts = cur.fetchall()
+
+                mess_cut_days = 0
+
+                for cut in cuts:
+                    cut_start = max(cut['start_date'], start_date_obj)
+                    cut_end   = min(cut['end_date'], end_date_obj)
+
+                    total_cut = (cut_end - cut_start).days + 1
+
+                    # All days inside this cut
+                    all_cut_days = [
+                        cut_start + timedelta(days=i)
+                        for i in range(total_cut)
+                    ]
+
+                    # Remove closed days → only open days count
+                    open_cut_days = [d for d in all_cut_days if d not in closed_dates]
+
+                    # Must have at least 3 OPEN days
+                    if len(open_cut_days) >= 3:
+                        mess_cut_days += len(open_cut_days)
+
+                # final chargeable days
+                chargeable_days = max(base_active_days - mess_cut_days, 0)
+
+                # ---------- LATE MESS FEE ----------
+                cur.execute("""
+                    SELECT COUNT(*) AS c
+                    FROM late_mess
+                    WHERE user_id=%s
+                      AND status='approved'
+                      AND date_requested BETWEEN %s AND %s
+                """, (user['id'], start_date_obj, end_date_obj))
+                row = cur.fetchone()
+                late_mess_count = row['c'] if row else 0
+                late_mess_fee = late_mess_count * 5   # ₹5 per late mess
+
+                # ---------- TOTAL AMOUNT ----------
+                total_amount = round(
+                    (daily_amount * chargeable_days) +
+                    late_mess_fee,
+                    2
+                )
+
+                # ---------- INSERT BILL ----------
+                cur.execute("""
+                    INSERT INTO bills
+                      (user_id, bill_date, daily_amount,
+                       active_days, mess_cut_days,
+                       late_mess_fee, total_amount)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    user['id'], bill_date, daily_amount,
+                    chargeable_days, mess_cut_days,
+                    late_mess_fee, total_amount
+                ))
+
+                bills_generated.append({
+                    'user': user['name'],
+                    'daily_amount': daily_amount,
+                    'active_days': chargeable_days,
+                    'mess_cut_days': mess_cut_days,
+                    'late_mess_fee': late_mess_fee,
+                    'total_amount': total_amount
+                })
+
+            conn.commit()
+
+            # Save in session
+            session['last_generated_bills'] = json.dumps(bills_generated)
+            session['last_bill_month'] = bill_month
+
+            flash(f"✅ Bills generated for {len(bills_generated)} users (month {bill_month})", "success")
+
+        # ----------------------------------------------------
+        # CSV EXPORT
+        # ----------------------------------------------------
+        if request.args.get('download') == 'csv':
+            if not bills_generated and 'last_generated_bills' in session:
+                bills_generated = json.loads(session['last_generated_bills'])
+
+            if bills_generated:
+                si = io.StringIO()
+                writer = csv.writer(si)
+
+                writer.writerow([
+                    'User', 'Daily Amount', 'Active Days', 'Mess Cut Days',
+                    'Late Mess Fee', 'Total Amount'
+                ])
+
+                for b in bills_generated:
+                    writer.writerow([
+                        b['user'], b['daily_amount'], b['active_days'],
+                        b['mess_cut_days'], b['late_mess_fee'],
+                        b['total_amount']
+                    ])
+
+                return Response(
+                    si.getvalue(),
+                    mimetype="text/csv",
+                    headers={
+                        "Content-Disposition":
+                            f"attachment; filename=bills_{session.get('last_bill_month', 'unknown')}.csv"
+                    }
+                )
+
+    except Exception as e:
+        if conn: conn.rollback()
+        current_app.logger.exception("Bill generation error")
+        flash(f"Error generating bills: {e}", "danger")
+
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+    # Load from session if page reloaded
+    if not bills_generated and 'last_generated_bills' in session:
+        bills_generated = json.loads(session['last_generated_bills'])
+
+    return render_template('admin_generate_bills.html',
+                           bills_generated=bills_generated)
 
 # ---------------- ADMIN: VIEW HISTORICAL QR SCAN COUNTS ----------------
 from flask import render_template, flash, redirect, url_for
