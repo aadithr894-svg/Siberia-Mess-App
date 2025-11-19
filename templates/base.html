@@ -13,7 +13,7 @@
 
 <style>
     :root {
-        --primary: #3498db; /* single primary color */
+        --primary: #3498db;
         --bg: #f0f4f8;
         --card-bg: #ffffff;
         --text-color: #333;
@@ -65,76 +65,31 @@
     nav .nav-links {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 12px;
     }
 
     nav a {
         color: white;
         text-decoration: none;
-        padding: 6px 12px;
+        padding: 6px 14px;
         border-radius: var(--radius);
         font-weight: 600;
         transition: all 0.3s ease;
     }
 
     nav a:hover {
-        background-color: rgba(255,255,255,0.2);
+        background-color: rgba(255,255,255,0.25);
     }
 
     /* Main container */
     .container {
-        padding: 20px;
+        padding: 25px;
         max-width: 1200px;
         margin: 20px auto;
         background-color: var(--card-bg);
         border-radius: var(--radius);
         box-shadow: var(--shadow);
         overflow-x: auto;
-    }
-
-    /* Buttons */
-    .btn-custom {
-        padding: 8px 20px;
-        border-radius: 50px;
-        background-color: var(--primary);
-        color: white;
-        font-weight: 600;
-        border: none;
-        transition: 0.3s;
-    }
-
-    .btn-custom:hover {
-        background-color: #2176c3;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 18px rgba(0,0,0,0.2);
-    }
-
-    /* Tables */
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-        border-radius: var(--radius);
-        overflow: hidden;
-        box-shadow: var(--shadow);
-    }
-
-    th, td {
-        padding: 12px 10px;
-        text-align: left;
-    }
-
-    th {
-        background-color: var(--primary);
-        color: white;
-    }
-
-    tr:nth-child(even) {
-        background-color: #f8f9fa;
-    }
-
-    tr:hover {
-        background-color: #e1f0ff;
     }
 
     /* Responsive navbar */
@@ -147,12 +102,13 @@
         nav .nav-links {
             flex-direction: column;
             width: 100%;
+            margin-top: 10px;
         }
 
         nav .nav-links a {
             width: 100%;
             text-align: left;
-            padding: 10px 0;
+            padding: 10px 10px;
         }
     }
 
@@ -161,9 +117,11 @@
         margin-top: 40px;
         font-size: 0.9rem;
         color: #7f8c8d;
+        padding-bottom: 25px;
     }
 </style>
 </head>
+
 <body>
 
 <!-- Navbar -->
@@ -172,35 +130,38 @@
         <img src="{{ url_for('static', filename='Images/logo.webp') }}" alt="Siberia Mess Logo">
         Siberia Mess
     </div>
-<div class="nav-links">
-    {% if current_user.is_authenticated %}
-        {% if current_user.is_admin %}
-            <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
-            <a href="{{ url_for('users_list') }}">Users List</a>
-            <a href="{{ url_for('new_users_list') }}">New Users</a>
-            <a href="{{ url_for('mess_cut_list') }}">Mess Cuts</a>
-            <a href="{{ url_for('late_mess_list') }}">Late Mess</a>
-            <a href="{{ url_for('mess_menu') }}">Mess Menu</a>  <!-- New Option -->
-        {% else %}
-            <a href="{{ url_for('user_dashboard') }}">Dashboard</a>
-       
-            <a href="{{ url_for('my_qr') }}">My QR Code</a>
-            <a href="{{ url_for('my_mess_cuts') }}">My Mess Cuts</a> 
-            <a href="{{ url_for('mess_menu') }}">Mess Menu</a>  <!-- New Option -->
-            
 
+    <div class="nav-links">
+        {% if current_user.is_authenticated %}
+            
+            {% if current_user.is_admin %}
+                <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('users_list') }}">Users</a>
+                <a href="{{ url_for('new_users_list') }}">New Users</a>
+                <a href="{{ url_for('mess_cut_list') }}">Mess Cuts</a>
+                <a href="{{ url_for('late_mess_list') }}">Late Mess</a>
+                <a href="{{ url_for('mess_menu') }}">Mess Menu</a>
+                <a href="{{ url_for('generate_bills') }}">Generate Bills</a>
+            {% else %}
+                <a href="{{ url_for('user_dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('my_qr') }}">My QR</a>
+                <a href="{{ url_for('my_mess_cuts') }}">My Mess Cuts</a>
+                <a href="{{ url_for('mess_menu') }}">Mess Menu</a>
+            {% endif %}
+
+            <a href="{{ url_for('logout') }}">Logout</a>
+
+        {% else %}
+            <a href="{{ url_for('login') }}">Login</a>
+            <a href="{{ url_for('register') }}">Register</a>
         {% endif %}
-        <a href="{{ url_for('logout') }}">Logout</a>
-    {% else %}
-        <a href="{{ url_for('login') }}">Login</a>
-        <a href="{{ url_for('register') }}">Register</a>
-    {% endif %}
-</div>
+    </div>
 </nav>
 
-<!-- Main content -->
+<!-- Main content block -->
 <div class="container">
-    {% block content %}{% endblock %}
+    {% block content %}
+    {% endblock %}
 </div>
 
 <!-- Footer -->
@@ -210,5 +171,6 @@
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 </body>
 </html>
