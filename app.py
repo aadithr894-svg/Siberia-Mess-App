@@ -1250,7 +1250,7 @@ def generate_bills():
                     SELECT COUNT(*) AS c
                     FROM late_mess
                     WHERE user_id=%s
-                    AND late_date BETWEEN %s AND %s
+                    AND date_requested BETWEEN %s AND %s
                 """, (u['id'], start_date, end_date))
 
                 late_count = cur.fetchone()['c']
