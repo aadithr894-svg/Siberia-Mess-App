@@ -1196,34 +1196,27 @@ def generate_bills():
             last_day = calendar.monthrange(year, month)[1]
             end_date = date(year, month, last_day)
 
-            # parse closed days
             closed_dates = set()
             if closed_str.strip():
                 for d in closed_str.split(","):
                     d = d.strip()
                     if d:
-                        closed_dates.add(
-                            datetime.strptime(d, "%d-%m-%Y").date()
-                        )
+                        closed_dates.add(datetime.strptime(d, "%d-%m-%Y").date())
 
-            # delete previous bills for this month
             cur.execute("DELETE FROM bills WHERE bill_date=%s", (start_date,))
             conn.commit()
 
-            # get all users
             cur.execute("SELECT id, name FROM users")
             users = cur.fetchall()
 
-            # process each user
             for u in users:
 
-                # mess cut calculation (3-day rule)
                 cur.execute("""
                     SELECT start_date, end_date
                     FROM mess_cut
                     WHERE user_id=%s
-                    AND start_date <= %s
-                    AND end_date >= %s
+                      AND start_date <= %s
+                      AND end_date   >= %s
                 """, (u['id'], end_date, start_date))
 
                 cuts = cur.fetchall()
@@ -1233,11 +1226,8 @@ def generate_bills():
                     s = max(c['start_date'], start_date)
                     e = min(c['end_date'], end_date)
 
-                    total_days = (e - s).days + 1
-
-                    # mess cut only valid if >= 3 days AFTER removing closed days
                     valid_days = []
-                    for i in range(total_days):
+                    for i in range((e - s).days + 1):
                         d = s + timedelta(days=i)
                         if d not in closed_dates:
                             valid_days.append(d)
@@ -1245,7 +1235,7 @@ def generate_bills():
                     if len(valid_days) >= 3:
                         mess_cut_days += len(valid_days)
 
-                # late mess fee
+                # FIXED COLUMN NAME HERE
                 cur.execute("""
                     SELECT COUNT(*) AS c
                     FROM late_mess
@@ -1256,13 +1246,11 @@ def generate_bills():
                 late_count = cur.fetchone()['c']
                 late_fee = late_count * 5
 
-                # insert bill
                 cur.execute("""
                     INSERT INTO bills (user_id, bill_date, mess_cut_days, late_mess_fee)
                     VALUES (%s, %s, %s, %s)
                 """, (u['id'], start_date, mess_cut_days, late_fee))
 
-                # save for HTML
                 bills_generated.append({
                     "user": u['name'],
                     "mess_cut_days": mess_cut_days,
@@ -1271,15 +1259,15 @@ def generate_bills():
 
             conn.commit()
 
-            # save to session for reload
-            session['last_generated_bills'] = bills_generated
+            # SAFE JSON
+            session['last_generated_bills'] = json.dumps(bills_generated)
             session['last_bill_month'] = bill_month
 
             flash("Bills generated successfully!", "success")
 
-        # CSV export
+        # CSV EXPORT
         if request.args.get("download") == "csv":
-            bills = session.get("last_generated_bills", [])
+            bills = json.loads(session.get("last_generated_bills", "[]"))
 
             si = io.StringIO()
             writer = csv.writer(si)
@@ -1309,10 +1297,12 @@ def generate_bills():
         if conn:
             conn.close()
 
-    # load from session
-    bills_generated = session.get("last_generated_bills", [])
+    if 'last_generated_bills' in session:
+        bills_generated = json.loads(session['last_generated_bills'])
 
     return render_template("admin_generate_bills.html", bills_generated=bills_generated)
+
+
 
 # ---------------- ADMIN: VIEW HISTORICAL QR SCAN COUNTS ----------------
 from flask import render_template, flash, redirect, url_for
