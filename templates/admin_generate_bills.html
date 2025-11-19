@@ -16,6 +16,9 @@
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
+        .table th, .table td {
+            vertical-align: middle;
+        }
     </style>
 </head>
 
@@ -24,50 +27,71 @@
 <div class="container mt-4">
     <h2 class="mb-4 text-primary text-center">Generate Monthly Bills</h2>
 
+    <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
+                <div class="alert alert-{{ category }} mt-2 rounded">{{ message }}</div>
             {% endfor %}
         {% endif %}
     {% endwith %}
 
+    <!-- Bill Generation Form -->
     <div class="card p-3 mb-4">
         <form method="POST">
-            <label class="form-label">Select Month</label>
-            <input type="month" name="bill_month" class="form-control mb-3" required>
 
-            <label class="form-label">Mess Closed Dates</label>
-            <input type="text" name="mess_closed_dates" class="form-control mb-3"
-                   placeholder="DD-MM-YYYY,DD-MM-YYYY">
+            <!-- Month Only -->
+            <div class="mb-3">
+                <label for="bill_month" class="form-label">Select Month</label>
+                <input type="month" name="bill_month" id="bill_month" class="form-control" required>
+            </div>
 
-            <button class="btn btn-success w-100">Generate Bills</button>
+            <!-- Mess Closed Dates -->
+            <div class="mb-3">
+                <label for="mess_closed_dates" class="form-label">Mess Closed Dates (Optional)</label>
+                <input type="text"
+                       name="mess_closed_dates"
+                       id="mess_closed_dates"
+                       class="form-control"
+                       placeholder="DD-MM-YYYY,DD-MM-YYYY">
+                <small class="text-muted">Enter comma-separated dates when the mess was closed.</small>
+            </div>
+
+            <button type="submit" class="btn btn-success w-100">Generate Bills</button>
         </form>
     </div>
 
+    <!-- Generated Bills Table -->
     {% if bills_generated %}
-        <table class="table table-striped shadow-sm">
-            <thead class="table-dark">
-                <tr>
-                    <th>User</th>
-                    <th>Mess Cut Days</th>
-                    <th>Late Mess Fee</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for bill in bills_generated %}
-                <tr>
-                    <td>{{ bill['user'] }}</td>
-                    <td>{{ bill['mess_cut_days'] }}</td>
-                    <td>₹{{ bill['late_mess_fee'] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <h3 class="text-secondary mb-2">Generated Bills</h3>
 
-        <a href="?download=csv" class="btn btn-primary">Download CSV</a>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover shadow-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>User</th>
+                        <th>Mess Cut Days</th>
+                        <th>Late Mess Fee (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bill in bills_generated %}
+                    <tr>
+                        <td>{{ bill['user'] }}</td>
+                        <td>{{ bill['mess_cut_days'] }}</td>
+                        <td>₹{{ bill['late_mess_fee'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- CSV Download -->
+        <a href="?download=csv" class="btn btn-primary mt-3">Download CSV</a>
     {% endif %}
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
 </html>
