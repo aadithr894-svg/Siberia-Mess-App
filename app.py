@@ -1166,17 +1166,23 @@ def live_count(meal_type):
 
 import calendar
 import csv
-import json
-
 import io
+import json
 from datetime import date, datetime, timedelta
+
+from flask import (
+    render_template, request, redirect, url_for,
+    flash, session, Response, current_app
+)
+from flask_login import login_required, current_user
+
 
 @app.route('/admin/generate_bills', methods=['GET', 'POST'])
 @login_required
 def generate_bills():
-    if not getattr(current_user, 'is_admin', False):
+    if not getattr(current_user, "is_admin", False):
         flash("Unauthorized", "danger")
-        return redirect(url_for('admin_dashboard'))
+        return redirect(url_for("admin_dashboard"))
 
     bills_generated = []
     conn = cur = None
@@ -1185,89 +1191,134 @@ def generate_bills():
         conn = mysql_pool.get_connection()
         cur = conn.cursor(dictionary=True)
 
+        # ------------------ FORM SUBMISSION ------------------
         if request.method == "POST":
+
             bill_month = request.form.get("bill_month")
             closed_str = request.form.get("mess_closed_dates", "")
 
             if not bill_month:
-                flash("Select a month", "warning")
+                flash("Please select a month", "warning")
                 return redirect(url_for("generate_bills"))
 
+            # Month boundaries
             year, month = map(int, bill_month.split("-"))
             start_date = date(year, month, 1)
             last_day = calendar.monthrange(year, month)[1]
             end_date = date(year, month, last_day)
 
+            # Parse closed dates
             closed_dates = set()
             if closed_str.strip():
                 for d in closed_str.split(","):
                     d = d.strip()
                     if d:
-                        closed_dates.add(datetime.strptime(d, "%d-%m-%Y").date())
+                        try:
+                            closed_dates.add(datetime.strptime(d, "%d-%m-%Y").date())
+                        except:
+                            pass
 
+            # Remove old bills for this month
             cur.execute("DELETE FROM bills WHERE bill_date=%s", (start_date,))
             conn.commit()
 
+            # Get all users
             cur.execute("SELECT id, name FROM users")
             users = cur.fetchall()
 
+            # ------------------ MAIN USER LOOP ------------------
             for u in users:
 
+                # ---- FETCH RAW MESS CUTS ----
                 cur.execute("""
                     SELECT start_date, end_date
                     FROM mess_cut
                     WHERE user_id=%s
                       AND start_date <= %s
-                      AND end_date   >= %s
-                """, (u['id'], end_date, start_date))
+                      AND end_date >= %s
+                    ORDER BY start_date
+                """, (u["id"], end_date, start_date))
 
-                cuts = cur.fetchall()
+                raw_cuts = cur.fetchall()
+                cuts = []
+
+                # Convert strings → dates
+                for c in raw_cuts:
+                    s = c["start_date"]
+                    e = c["end_date"]
+                    if isinstance(s, str):
+                        s = datetime.strptime(s, "%Y-%m-%d").date()
+                    if isinstance(e, str):
+                        e = datetime.strptime(e, "%Y-%m-%d").date()
+                    cuts.append((s, e))
+
+                # ------------- MERGE contiguous / overlapping -------------
+                merged = []
+                for s, e in sorted(cuts):
+                    if not merged:
+                        merged.append([s, e])
+                    else:
+                        last_s, last_e = merged[-1]
+                        if s <= last_e + timedelta(days=1):  # extension allowed
+                            merged[-1][1] = max(last_e, e)
+                        else:
+                            merged.append([s, e])
+
+                # ------------- PER-MONTH SPLIT + 3-DAY RULE ---------------
                 mess_cut_days = 0
 
-                for c in cuts:
-                    s = max(c['start_date'], start_date)
-                    e = min(c['end_date'], end_date)
+                for s, e in merged:
 
-                    valid_days = []
-                    for i in range((e - s).days + 1):
-                        d = s + timedelta(days=i)
-                        if d not in closed_dates:
-                            valid_days.append(d)
+                    # Build list of valid dates *belonging to this billing month only*
+                    month_days = []
+                    current = s
+                    while current <= e:
+                        if start_date <= current <= end_date:  # inside bill month
+                            if current not in closed_dates:    # not closed
+                                month_days.append(current)
+                        current += timedelta(days=1)
 
-                    if len(valid_days) >= 3:
-                        mess_cut_days += len(valid_days)
+                    # Debug
+                    print(f"[DEBUG] User {u['name']} valid days in month: {month_days}")
 
-                # FIXED COLUMN NAME HERE
+                    # Apply 3-day rule on the per-month block
+                    if len(month_days) >= 3:
+                        mess_cut_days += len(month_days)
+                        print(f"[DEBUG] ✔ Counted {len(month_days)} days")
+                    else:
+                        print(f"[DEBUG] ✘ Rejected (<3 days)")
+
+                # ------------- LATE MESS FEE -------------
                 cur.execute("""
                     SELECT COUNT(*) AS c
                     FROM late_mess
                     WHERE user_id=%s
-                    AND date_requested BETWEEN %s AND %s
-                """, (u['id'], start_date, end_date))
+                      AND date_requested BETWEEN %s AND %s
+                """, (u["id"], start_date, end_date))
 
-                late_count = cur.fetchone()['c']
-                late_fee = late_count * 5
+                late_fee = cur.fetchone()["c"] * 5
 
+                # ------------- INSERT BILL -------------
                 cur.execute("""
                     INSERT INTO bills (user_id, bill_date, mess_cut_days, late_mess_fee)
                     VALUES (%s, %s, %s, %s)
-                """, (u['id'], start_date, mess_cut_days, late_fee))
+                """, (u["id"], start_date, mess_cut_days, late_fee))
 
                 bills_generated.append({
-                    "user": u['name'],
+                    "user": u["name"],
                     "mess_cut_days": mess_cut_days,
                     "late_mess_fee": late_fee
                 })
 
             conn.commit()
 
-            # SAFE JSON
-            session['last_generated_bills'] = json.dumps(bills_generated)
-            session['last_bill_month'] = bill_month
+            # Save for reload
+            session["last_generated_bills"] = json.dumps(bills_generated)
+            session["last_bill_month"] = bill_month
 
             flash("Bills generated successfully!", "success")
 
-        # CSV EXPORT
+        # ------------------ CSV DOWNLOAD ------------------
         if request.args.get("download") == "csv":
             bills = json.loads(session.get("last_generated_bills", "[]"))
 
@@ -1283,7 +1334,7 @@ def generate_bills():
                 mimetype="text/csv",
                 headers={
                     "Content-Disposition":
-                        f"attachment; filename=bills_{session.get('last_bill_month','unknown')}.csv"
+                        f"attachment; filename=bills_{session.get('last_bill_month', 'unknown')}.csv"
                 }
             )
 
@@ -1299,8 +1350,9 @@ def generate_bills():
         if conn:
             conn.close()
 
-    if 'last_generated_bills' in session:
-        bills_generated = json.loads(session['last_generated_bills'])
+    # load from session
+    if "last_generated_bills" in session:
+        bills_generated = json.loads(session["last_generated_bills"])
 
     return render_template("admin_generate_bills.html", bills_generated=bills_generated)
 
