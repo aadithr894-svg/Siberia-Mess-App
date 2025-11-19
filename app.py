@@ -1162,6 +1162,10 @@ def live_count(meal_type):
 
     return jsonify(success=True, meal_type=meal_type, count=total)
 
+
+
+import calendar
+
 @app.route('/admin/generate_bills', methods=['GET', 'POST'])
 @login_required
 def generate_bills():
