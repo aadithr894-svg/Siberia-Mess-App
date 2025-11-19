@@ -1274,7 +1274,7 @@ def generate_bills():
                 cur.execute("""
                     INSERT INTO bills (user_id, bill_date, mess_cut_days, late_mess_fee)
                     VALUES (%s, %s, %s, %s)
-                """, (u['id'], start_date, mess_cut_days, late_fee))
+                """, (u['id'], start_date,0, mess_cut_days, late_fee))
 
                 bills_generated.append({
                     "user": u['name'],
