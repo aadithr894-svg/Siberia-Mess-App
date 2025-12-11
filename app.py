@@ -12,6 +12,7 @@ from mysql.connector import pooling
 app = Flask(__name__)
 app.config.from_object(Config)
 import resend
+import os
 resend.api_key = os.environ.get("RESEND_API_KEY")
 
 # ---------------- MySQL Connection Pool ----------------
