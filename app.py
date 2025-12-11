@@ -2082,14 +2082,21 @@ from werkzeug.security import generate_password_hash
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     try:
-        email = s.loads(token, salt='password-reset-salt', max_age=3600)  # get email from token
-    except:
-        flash("The reset link is invalid or has expired.", "danger")
-        return redirect(url_for('login'))
+        email = s.loads(token, salt='password-reset-salt', max_age=1800)  # 30 mins
+    except SignatureExpired:
+        flash("The reset link has expired.", "danger")
+        return redirect(url_for('forgot'))
+    except BadSignature:
+        flash("Invalid reset link.", "danger")
+        return redirect(url_for('forgot'))
 
     if request.method == 'POST':
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
+
+        if not password or not confirm_password:
+            flash("All fields are required.", "danger")
+            return redirect(request.url)
 
         if password != confirm_password:
             flash("Passwords do not match.", "danger")
@@ -2097,14 +2104,20 @@ def reset_password(token):
 
         hashed_pw = generate_password_hash(password)
 
-        conn = mysql_pool.get_connection()
-        cur = conn.cursor()
-        cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_pw, email))
-        conn.commit()
-        cur.close()
-        conn.close()
+        try:
+            conn = mysql_pool.get_connection()
+            cur = conn.cursor()
+            cur.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_pw, email))
+            conn.commit()
+        except Exception as e:
+            print("🔥 RESET PASSWORD ERROR:", e)
+            flash("Error updating password.", "danger")
+            return redirect(request.url)
+        finally:
+            if cur: cur.close()
+            if conn: conn.close()
 
-        flash("Your password has been reset. You can now login.", "success")
+        flash("Your password has been reset successfully!", "success")
         return redirect(url_for('login'))
 
     return render_template('reset.html')
