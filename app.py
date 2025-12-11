@@ -2024,11 +2024,12 @@ def forgot():
 
         conn = None
         cur = None
+
         try:
             conn = mysql_pool.get_connection()
             cur = conn.cursor(dictionary=True)
 
-            # 1️⃣ Check if email exists
+            # Check if email exists
             cur.execute("SELECT * FROM users WHERE email=%s", (email,))
             user = cur.fetchone()
 
@@ -2036,31 +2037,31 @@ def forgot():
                 flash("Email not found.", "danger")
                 return redirect(url_for('forgot'))
 
-            # 2️⃣ Create secure token
+            # Generate reset token
             token = s.dumps(email, salt='password-reset-salt')
             reset_url = url_for('reset_password', token=token, _external=True)
 
-            # 3️⃣ Send email safely
-            msg = Message(
-                subject="Password Reset Request",
-                recipients=[email],
-                html=f"""
-                <p>Hello <strong>{user['name']}</strong>,</p>
-                <p>Click below to reset your password:</p>
-                <p><a href="{reset_url}">{reset_url}</a></p>
-                <p>This link is valid for <b>30 minutes</b>.</p>
-                """
-            )
-
+            # SEND EMAIL USING RESEND API
             try:
-                mail.send(msg)
-            except Exception as mail_error:
-                print("🔥 EMAIL ERROR:", mail_error)
-                flash("Unable to send email. Please contact admin.", "danger")
-                return redirect(url_for('forgot'))
+                resend.Emails.send({
+                    "from": "Siberia Mess <no-reply@siberiamess.in>",
+                    "to": email,
+                    "subject": "Password Reset Request",
+                    "html": f"""
+                        <p>Hello <strong>{user['name']}</strong>,</p>
+                        <p>Click below to reset your password:</p>
+                        <p><a href="{reset_url}">{reset_url}</a></p>
+                        <p>This link is valid for <b>30 minutes</b>.</p>
+                    """
+                })
 
-            flash("A password reset link has been sent to your email.", "success")
-            return redirect(url_for('login'))
+                flash("A password reset link has been sent to your email.", "success")
+                return redirect(url_for('login'))
+
+            except Exception as mail_error:
+                print("🔥 RESEND EMAIL ERROR:", mail_error)
+                flash("Unable to send email. Try again later.", "danger")
+                return redirect(url_for('forgot'))
 
         except Exception as e:
             print("🔥 FORGOT ERROR:", e)
@@ -2068,8 +2069,17 @@ def forgot():
             return redirect(url_for('forgot'))
 
         finally:
-            if cur: cur.close()
-            if conn: conn.close()
+            # Safe MySQL close
+            try:
+                if cur:
+                    cur.close()
+            except:
+                pass
+            try:
+                if conn and conn.is_connected():
+                    conn.close()
+            except:
+                pass
 
     return render_template('forgot.html')
 
