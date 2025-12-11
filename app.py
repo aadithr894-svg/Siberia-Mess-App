@@ -2020,12 +2020,13 @@ def forgot():
             flash("Please enter your email.", "danger")
             return redirect(url_for('forgot'))
 
-        # Check if the email exists in the users table
         conn = None
         cur = None
         try:
             conn = mysql_pool.get_connection()
             cur = conn.cursor(dictionary=True)
+
+            # 1️⃣ Check if email exists
             cur.execute("SELECT * FROM users WHERE email=%s", (email,))
             user = cur.fetchone()
 
@@ -2033,33 +2034,43 @@ def forgot():
                 flash("Email not found.", "danger")
                 return redirect(url_for('forgot'))
 
-            # Generate token valid for 30 minutes
+            # 2️⃣ Create secure token
             token = s.dumps(email, salt='password-reset-salt')
             reset_url = url_for('reset_password', token=token, _external=True)
 
-            # Prepare email
+            # 3️⃣ Send email safely
             msg = Message(
                 subject="Password Reset Request",
                 recipients=[email],
-                body=f"Hello {user['name']},\n\nTo reset your password, click the link below:\n{reset_url}\n\nThis link is valid for 30 minutes.",
-                sender=app.config['MAIL_DEFAULT_SENDER']
+                html=f"""
+                <p>Hello <strong>{user['name']}</strong>,</p>
+                <p>Click below to reset your password:</p>
+                <p><a href="{reset_url}">{reset_url}</a></p>
+                <p>This link is valid for <b>30 minutes</b>.</p>
+                """
             )
 
-            mail.send(msg)
-            flash("Password reset link has been sent to your email.", "success")
+            try:
+                mail.send(msg)
+            except Exception as mail_error:
+                print("🔥 EMAIL ERROR:", mail_error)
+                flash("Unable to send email. Please contact admin.", "danger")
+                return redirect(url_for('forgot'))
+
+            flash("A password reset link has been sent to your email.", "success")
             return redirect(url_for('login'))
 
         except Exception as e:
-            flash(f"Error sending email: {str(e)}", "danger")
+            print("🔥 FORGOT ERROR:", e)
+            flash("Something went wrong. Try again later.", "danger")
             return redirect(url_for('forgot'))
 
         finally:
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()  # Return connection to pool
+            if cur: cur.close()
+            if conn: conn.close()
 
     return render_template('forgot.html')
+
 
 
 
