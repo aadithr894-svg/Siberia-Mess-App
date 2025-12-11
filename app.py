@@ -2045,7 +2045,7 @@ def forgot():
             # SEND EMAIL USING RESEND API
             try:
                 resend.Emails.send({
-                    "from": "Siberia Mess <onboarding@resend.dev>",,
+                    "from": "Siberia Mess <onboarding@resend.dev>",
                     "to": email,
                     "subject": "Password Reset Request",
                     "html": f"""
