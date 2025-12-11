@@ -15,5 +15,5 @@ class Config:
     MAIL_PORT = 587
     MAIL_USE_TLS = True
     MAIL_USERNAME = 'messsiberia@gmail.com'        # your Gmail
-    MAIL_PASSWORD = 'khbbaspafumwfdjj' # App Password you generated
+    MAIL_PASSWORD = 'tpzh xdre pagj xvai' # App Password you generated
     MAIL_DEFAULT_SENDER = 'messsiberia@gmail.com'
