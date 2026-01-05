@@ -2042,13 +2042,13 @@ def forgot():
             token = s.dumps(email, salt='password-reset-salt')
             reset_url = url_for('reset_password', token=token, _external=True)
 
-            # SEND EMAIL USING RESEND (CORRECT PYTHON SYNTAX)
+            # ✅ SEND EMAIL USING RESEND (CORRECT)
             try:
-                resend.emails.send(
-                    from_email="Siberia Mess <onboarding@resend.dev>",  # change after domain verification
-                    to=email,
-                    subject="Password Reset Request",
-                    html=f"""
+                resend.Emails.send({
+                    "from": "Siberia Mess <onboarding@resend.dev>",
+                    "to": [email],   # MUST be list
+                    "subject": "Password Reset Request",
+                    "html": f"""
                         <p>Hello <strong>{user['name']}</strong>,</p>
                         <p>You requested a password reset.</p>
                         <p>Click the link below to reset your password:</p>
@@ -2056,7 +2056,7 @@ def forgot():
                         <p>This link is valid for <b>30 minutes</b>.</p>
                         <p>If you did not request this, please ignore this email.</p>
                     """
-                )
+                })
 
                 flash("A password reset link has been sent to your email.", "success")
                 return redirect(url_for('login'))
