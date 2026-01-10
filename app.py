@@ -2022,8 +2022,48 @@ app.config['MAIL_USERNAME'] = 'apikey'  # IMPORTANT
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')  # Brevo SMTP key
 app.config['MAIL_DEFAULT_SENDER'] = 'Siberia Mess <no-reply@brevo.com>'
 
-mail = Mail(app)
+import requests
+import os
+from itsdangerous import URLSafeTimedSerializer
+from flask import request, redirect, url_for, flash, render_template
+
+BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
+
+def send_reset_email(email, name, reset_url):
+    url = "https://api.brevo.com/v3/smtp/email"
+
+    headers = {
+        "accept": "application/json",
+        "api-key": BREVO_API_KEY,
+        "content-type": "application/json"
+    }
+
+    payload = {
+        "sender": {
+            "name": "Siberia Mess",
+            "email": "no-reply@brevo.com"
+        },
+        "to": [{
+            "email": email,
+            "name": name
+        }],
+        "subject": "Password Reset Request",
+        "htmlContent": f"""
+            <p>Hello <strong>{name}</strong>,</p>
+            <p>You requested a password reset.</p>
+            <p><a href="{reset_url}">Reset Password</a></p>
+            <p>This link is valid for <b>30 minutes</b>.</p>
+            <p>If you did not request this, please ignore this email.</p>
+        """
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+
+    if response.status_code not in (200, 201):
+        raise Exception(response.text)
+
 
 @app.route('/forgot', methods=['GET', 'POST'])
 def forgot():
@@ -2034,14 +2074,10 @@ def forgot():
             flash("Please enter your email.", "danger")
             return redirect(url_for('forgot'))
 
-        conn = None
-        cur = None
-
         try:
             conn = mysql_pool.get_connection()
             cur = conn.cursor(dictionary=True)
 
-            # Check if email exists
             cur.execute("SELECT * FROM users WHERE email=%s", (email,))
             user = cur.fetchone()
 
@@ -2049,54 +2085,27 @@ def forgot():
                 flash("Email not found.", "danger")
                 return redirect(url_for('forgot'))
 
-            # Generate reset token (validity enforced in reset route)
             token = s.dumps(email, salt='password-reset-salt')
             reset_url = url_for('reset_password', token=token, _external=True)
 
-            # ✅ SEND EMAIL USING BREVO (FREE)
-            try:
-                msg = Message(
-                    subject="Password Reset Request",
-                    recipients=[email],
-                    html=f"""
-                        <p>Hello <strong>{user['name']}</strong>,</p>
-                        <p>You requested a password reset.</p>
-                        <p>Click the link below to reset your password:</p>
-                        <p><a href="{reset_url}">{reset_url}</a></p>
-                        <p>This link is valid for <b>30 minutes</b>.</p>
-                        <p>If you did not request this, please ignore this email.</p>
-                    """
-                )
+            send_reset_email(email, user['name'], reset_url)
 
-                mail.send(msg)
-
-                flash("A password reset link has been sent to your email.", "success")
-                return redirect(url_for('login'))
-
-            except Exception as mail_error:
-                print("🔥 BREVO EMAIL ERROR:", mail_error)
-                flash("Unable to send email. Try again later.", "danger")
-                return redirect(url_for('forgot'))
+            flash("A password reset link has been sent to your email.", "success")
+            return redirect(url_for('login'))
 
         except Exception as e:
-            print("🔥 FORGOT ERROR:", e)
-            flash("Something went wrong. Try again later.", "danger")
+            print("🔥 BREVO EMAIL ERROR:", e)
+            flash("Unable to send email. Try again later.", "danger")
             return redirect(url_for('forgot'))
 
         finally:
             try:
-                if cur:
-                    cur.close()
-            except:
-                pass
-            try:
-                if conn and conn.is_connected():
-                    conn.close()
+                cur.close()
+                conn.close()
             except:
                 pass
 
     return render_template('forgot.html')
-
 
 
 
