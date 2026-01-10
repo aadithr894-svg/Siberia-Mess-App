@@ -2015,12 +2015,7 @@ from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer
 
-app.config['MAIL_SERVER'] = 'smtp-relay.brevo.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'apikey'  # IMPORTANT
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')  # Brevo SMTP key
-app.config['MAIL_DEFAULT_SENDER'] = 'Siberia Mess <no-reply@brevo.com>'
+
 
 import requests
 import os
