@@ -14,6 +14,7 @@ app.config.from_object(Config)
 import resend
 import os
 resend.api_key = os.environ.get("RESEND_API_KEY")
+VERIFIED_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL")
 
 # ---------------- MySQL Connection Pool ----------------
 # app.py (or wherever you configure your DB)
