@@ -2012,8 +2012,19 @@ from flask_mail import Mail,Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
 # Serializer for generating and validating tokens
-s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer
+
+app.config['MAIL_SERVER'] = 'smtp-relay.brevo.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'apikey'  # IMPORTANT
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')  # Brevo SMTP key
+app.config['MAIL_DEFAULT_SENDER'] = 'Siberia Mess <no-reply@brevo.com>'
+
 mail = Mail(app)
+s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
 @app.route('/forgot', methods=['GET', 'POST'])
 def forgot():
     if request.method == 'POST':
@@ -2038,17 +2049,16 @@ def forgot():
                 flash("Email not found.", "danger")
                 return redirect(url_for('forgot'))
 
-            # Generate reset token
+            # Generate reset token (validity enforced in reset route)
             token = s.dumps(email, salt='password-reset-salt')
             reset_url = url_for('reset_password', token=token, _external=True)
 
-            # ✅ SEND EMAIL USING RESEND (CORRECT)
+            # ✅ SEND EMAIL USING BREVO (FREE)
             try:
-                resend.Emails.send({
-                    "from": "Siberia Mess <onboarding@resend.dev>",
-                    "to": [email],   # MUST be list
-                    "subject": "Password Reset Request",
-                    "html": f"""
+                msg = Message(
+                    subject="Password Reset Request",
+                    recipients=[email],
+                    html=f"""
                         <p>Hello <strong>{user['name']}</strong>,</p>
                         <p>You requested a password reset.</p>
                         <p>Click the link below to reset your password:</p>
@@ -2056,13 +2066,15 @@ def forgot():
                         <p>This link is valid for <b>30 minutes</b>.</p>
                         <p>If you did not request this, please ignore this email.</p>
                     """
-                })
+                )
+
+                mail.send(msg)
 
                 flash("A password reset link has been sent to your email.", "success")
                 return redirect(url_for('login'))
 
             except Exception as mail_error:
-                print("🔥 RESEND EMAIL ERROR:", mail_error)
+                print("🔥 BREVO EMAIL ERROR:", mail_error)
                 flash("Unable to send email. Try again later.", "danger")
                 return redirect(url_for('forgot'))
 
