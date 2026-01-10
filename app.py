@@ -2038,7 +2038,7 @@ def send_reset_email(email, name, reset_url):
     payload = {
         "sender": {
             "name": "Siberia Mess",
-            "email": "no-reply@brevo.com"
+            "email": VERIFIED_SENDER_EMAIL
         },
         "to": [{
             "email": email,
@@ -2054,7 +2054,15 @@ def send_reset_email(email, name, reset_url):
         """
     }
 
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload,
+        timeout=10
+    )
+
+    print("BREVO STATUS:", response.status_code)
+    print("BREVO RESPONSE:", response.text)
 
     if response.status_code not in (200, 201):
         raise Exception(response.text)
@@ -2068,6 +2076,9 @@ def forgot():
         if not email:
             flash("Please enter your email.", "danger")
             return redirect(url_for('forgot'))
+
+        conn = None
+        cur = None
 
         try:
             conn = mysql_pool.get_connection()
@@ -2095,8 +2106,10 @@ def forgot():
 
         finally:
             try:
-                cur.close()
-                conn.close()
+                if cur:
+                    cur.close()
+                if conn:
+                    conn.close()
             except:
                 pass
 
