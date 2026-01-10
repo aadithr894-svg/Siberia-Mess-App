@@ -11,9 +11,9 @@ class Config:
 
     # Flask secret key (set this in Render as well)
     SECRET_KEY = os.environ.get('SECRET_KEY', 'supersecretkey')
-    MAIL_SERVER = 'smtp.gmail.com'
+    MAIL_SERVER = 'smtp-relay.brevo.com'
     MAIL_PORT = 587
     MAIL_USE_TLS = True
-    MAIL_USERNAME = 'messsiberia@gmail.com'        # your Gmail
-    MAIL_PASSWORD = 'tpzhxdrepagjxvai' # App Password you generated
-    MAIL_DEFAULT_SENDER = 'messsiberia@gmail.com'
+    MAIL_USERNAME = 'apikey'        # your Gmail
+    MAIL_PASSWORD = 'xsmtpsib-977398f9167022b005786e55e6d84012a171c01c86a8208df40d42259cb3eb23-MP7T9mWpIwrpnOfI' # App Password you generated
+    MAIL_DEFAULT_SENDER = 'Siberia Mess <no-reply@brevo.com>'
