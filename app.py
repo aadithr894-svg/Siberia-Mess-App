@@ -31,6 +31,8 @@ mysql_pool = pooling.MySQLConnectionPool(
     port = 43257 , #  ✅ your database name
     user="root",          # ✅ your RDS username
     password="zilhciIWfvxiqlcgwnxAzerHUQGnUwXr"   # ✅ your RDS password
+    ssl_ca="/etc/ssl/certs/ca-certificates.crt",
+    connection_timeout=15
 )
 
 
