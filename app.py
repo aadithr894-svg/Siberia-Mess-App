@@ -9,7 +9,12 @@ from config import Config
 from mysql.connector import pooling
 
 # ---------------- Flask App ----------------
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder="../templates",
+    static_folder="../static"
+)
+
 app.config.from_object(Config)
 import resend
 import os
@@ -32,7 +37,6 @@ mysql_pool = pooling.MySQLConnectionPool(
     user=os.environ.get("MYSQL_USER"),
     password=os.environ.get("MYSQL_PASSWORD")
 )
-
 
 
 
@@ -2176,3 +2180,4 @@ if __name__ == '__main__':
     app.run(debug=True)
 
 
+handler = app
