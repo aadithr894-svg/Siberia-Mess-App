@@ -1,14 +1,17 @@
-Flask==3.0.2
-Flask-Login==0.6.3
-Flask-Mail==0.9.1
-mysql-connector-python==8.3.0
-qrcode==7.4.2
-itsdangerous==2.2.0
-Werkzeug==3.0.1
-gunicorn==21.2.0
-pytz==2024.1
-Pillow==10.2.0
-resend==0.6.0
+﻿Flask
+Flask-Login
+Flask-Mail
+mysql-connector-python
+mysqlclient
+qrcode
+itsdangerous
+Werkzeug
+flask
+gunicorn
+pytz
+Pillow
+resend
+openpyxl
 
 
 
