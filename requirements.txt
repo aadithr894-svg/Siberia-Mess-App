@@ -12,6 +12,3 @@ pytz
 Pillow
 resend
 openpyxl
-
-
-
