@@ -9,12 +9,7 @@ from config import Config
 from mysql.connector import pooling
 
 # ---------------- Flask App ----------------
-app = Flask(
-    __name__,
-    template_folder="../templates",
-    static_folder="../static"
-)
-
+app = Flask(__name__)
 app.config.from_object(Config)
 import resend
 import os
@@ -31,11 +26,11 @@ mysql_pool = pooling.MySQLConnectionPool(
     pool_name="mypool",
     pool_size=5,
     pool_reset_session=True,
-    host=os.environ.get("MYSQL_HOST"),
-    database=os.environ.get("MYSQL_DB"),
-    port=int(os.environ.get("MYSQL_PORT", 3306)),
-    user=os.environ.get("MYSQL_USER"),
-    password=os.environ.get("MYSQL_PASSWORD")
+    host="shuttle.proxy.rlwy.net",  # ✅ RDS endpoint
+    database="mess_app",
+    port = 43257 , #  ✅ your database name
+    user="root",          # ✅ your RDS username
+    password="zilhciIWfvxiqlcgwnxAzerHUQGnUwXr"  # ✅ your RDS password
 )
 
 
@@ -2180,4 +2175,3 @@ if __name__ == '__main__':
     app.run(debug=True)
 
 
-handler = app
