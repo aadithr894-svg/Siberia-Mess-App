@@ -26,11 +26,11 @@ mysql_pool = pooling.MySQLConnectionPool(
     pool_name="mypool",
     pool_size=5,
     pool_reset_session=True,
-    host="gondola.proxy.rlwy.net",  # ✅ RDS endpoint
+    host="shinkansen.proxy.rlwy.net",  # ✅ RDS endpoint
     database="mess_app",
-    port = 51869 , #  ✅ your database name
+    port = 48397, #  ✅ your database name
     user="root",          # ✅ your RDS username
-    password="TymyKAgEhDTkddJvKmmjwTAjRKSxOVgA"  # ✅ your RDS password
+    password="QLrIpBDXQJmUJuGayBGcgcWlgqwHssau"  # ✅ your RDS password
 )
 
 
