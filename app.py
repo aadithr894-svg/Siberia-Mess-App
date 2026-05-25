@@ -234,6 +234,201 @@ def login():
     return render_template('login.html')
 
 
+# ================================================================
+#  ADD THESE ROUTES TO app.py  –  Mess Out Feature
+#  Place them anywhere after the login_manager / imports block
+# ================================================================
+
+from datetime import datetime
+import calendar
+
+MONTH_NAMES = {
+    1: "January", 2: "February", 3: "March",    4: "April",
+    5: "May",     6: "June",     7: "July",      8: "August",
+    9: "September", 10: "October", 11: "November", 12: "December"
+}
+
+
+# ----------------------------------------------------------------
+# USER: Apply for Mess Out
+# ----------------------------------------------------------------
+@app.route('/apply_mess_out', methods=['GET', 'POST'])
+@login_required
+def apply_mess_out():
+    now = datetime.now()
+    current_month = now.month
+    current_year  = now.year
+
+    # Build list of upcoming months (current + next 5) for the dropdown
+    months = []
+    for i in range(6):
+        m = ((current_month - 1 + i) % 12) + 1
+        y = current_year + ((current_month - 1 + i) // 12)
+        months.append({'value': f"{m}-{y}", 'label': f"{MONTH_NAMES[m]} {y}"})
+
+    if request.method == 'POST':
+        month_year = request.form.get('month_year')   # "6-2025"
+        if not month_year:
+            flash("Please select a month.", "danger")
+            return redirect(url_for('apply_mess_out'))
+
+        try:
+            month, year = map(int, month_year.split('-'))
+        except ValueError:
+            flash("Invalid month selection.", "danger")
+            return redirect(url_for('apply_mess_out'))
+
+        conn = get_db_connection()
+        cur  = conn.cursor(dictionary=True)
+        try:
+            # Check for duplicate
+            cur.execute(
+                "SELECT id FROM mess_out WHERE user_id=%s AND month=%s AND year=%s",
+                (current_user.id, month, year)
+            )
+            if cur.fetchone():
+                flash(f"You have already applied for Mess Out in {MONTH_NAMES[month]} {year}.", "warning")
+                return redirect(url_for('apply_mess_out'))
+
+            cur.execute(
+                "INSERT INTO mess_out (user_id, month, year) VALUES (%s, %s, %s)",
+                (current_user.id, month, year)
+            )
+            conn.commit()
+            flash(f"Mess Out request for {MONTH_NAMES[month]} {year} submitted successfully!", "success")
+        except Exception as e:
+            conn.rollback()
+            flash(f"Database error: {e}", "danger")
+        finally:
+            cur.close()
+            conn.close()
+
+        return redirect(url_for('my_mess_outs'))
+
+    return render_template('apply_mess_out.html', months=months)
+
+
+# ----------------------------------------------------------------
+# USER: My Mess Out Requests
+# ----------------------------------------------------------------
+@app.route('/my_mess_outs')
+@login_required
+def my_mess_outs():
+    conn = get_db_connection()
+    cur  = conn.cursor(dictionary=True)
+    try:
+        cur.execute(
+            "SELECT * FROM mess_out WHERE user_id=%s ORDER BY year DESC, month DESC",
+            (current_user.id,)
+        )
+        outs = cur.fetchall()
+    except Exception as e:
+        flash(f"Error fetching records: {e}", "danger")
+        outs = []
+    finally:
+        cur.close()
+        conn.close()
+
+    # Attach human-readable month name
+    for o in outs:
+        o['month_name'] = MONTH_NAMES.get(o['month'], str(o['month']))
+
+    return render_template('my_mess_outs.html', outs=outs)
+
+
+# ----------------------------------------------------------------
+# ADMIN: All Mess Out Requests (filterable by month/year)
+# ----------------------------------------------------------------
+@app.route('/admin/mess_out_list')
+@login_required
+def mess_out_list():
+    if not current_user.is_admin:
+        flash("Unauthorized access!", "danger")
+        return redirect(url_for('index'))
+
+    # Filter params from query string
+    selected_month = request.args.get('month', type=int, default=0)   # 0 = all
+    selected_year  = request.args.get('year',  type=int, default=datetime.now().year)
+
+    conn = get_db_connection()
+    cur  = conn.cursor(dictionary=True)
+    try:
+        if selected_month:
+            cur.execute("""
+                SELECT mo.*, u.name AS user_name, u.email AS user_email,
+                       u.phone AS user_phone, u.course AS user_course
+                FROM   mess_out mo
+                JOIN   users    u  ON u.id = mo.user_id
+                WHERE  mo.month = %s AND mo.year = %s
+                ORDER  BY mo.requested_at DESC
+            """, (selected_month, selected_year))
+        else:
+            cur.execute("""
+                SELECT mo.*, u.name AS user_name, u.email AS user_email,
+                       u.phone AS user_phone, u.course AS user_course
+                FROM   mess_out mo
+                JOIN   users    u  ON u.id = mo.user_id
+                WHERE  mo.year = %s
+                ORDER  BY mo.month DESC, mo.requested_at DESC
+            """, (selected_year,))
+
+        records = cur.fetchall()
+    except Exception as e:
+        flash(f"Error fetching records: {e}", "danger")
+        records = []
+    finally:
+        cur.close()
+        conn.close()
+
+    for r in records:
+        r['month_name'] = MONTH_NAMES.get(r['month'], str(r['month']))
+
+    # Years available in dropdown (current year ± 2)
+    now = datetime.now()
+    years = list(range(now.year - 1, now.year + 3))
+
+    return render_template(
+        'admin_mess_out.html',
+        records=records,
+        months=MONTH_NAMES,
+        selected_month=selected_month,
+        selected_year=selected_year,
+        years=years
+    )
+
+
+# ----------------------------------------------------------------
+# ADMIN: Approve / Reject a Mess Out request
+# ----------------------------------------------------------------
+@app.route('/admin/mess_out_action/<int:record_id>/<action>')
+@login_required
+def mess_out_action(record_id, action):
+    if not current_user.is_admin:
+        flash("Unauthorized!", "danger")
+        return redirect(url_for('index'))
+
+    if action not in ('approved', 'rejected'):
+        flash("Invalid action.", "danger")
+        return redirect(url_for('mess_out_list'))
+
+    conn = get_db_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            "UPDATE mess_out SET status=%s WHERE id=%s",
+            (action, record_id)
+        )
+        conn.commit()
+        flash(f"Request {action} successfully.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error: {e}", "danger")
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('mess_out_list'))
+
 
 
 @app.route('/reset_admin')
