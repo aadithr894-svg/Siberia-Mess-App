@@ -787,7 +787,7 @@ def apply_mess_cut():
             return redirect(url_for('apply_mess_cut'))
 
         # Minimum 3-day range
-        if (end_date - start_date).days + 2 < 3:
+        if (end_date - start_date).days < 3:
             flash("Minimum duration is 3 consecutive days.", "danger")
             return redirect(url_for('apply_mess_cut'))
 
